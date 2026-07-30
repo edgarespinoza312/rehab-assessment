@@ -1,0 +1,85 @@
+:root {
+
+    /*======================================================
+      COLOR SYSTEM
+    ======================================================*/
+
+    --background: #0F172A;
+    --background-secondary: #111827;
+
+    --surface: #1E293B;
+    --surface-hover: #273449;
+    --surface-hover-light: #334155;
+
+    --primary: #2563EB;
+    --primary-hover: #1D4ED8;
+
+    --success: #16A34A;
+    --warning: #F59E0B;
+    --danger: #DC2626;
+
+    --border: #334155;
+
+    --text-primary: #F8FAFC;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+
+    /*======================================================
+      LAYOUT
+    ======================================================*/
+
+    --content-width: 1440px;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+
+    /*======================================================
+      SPACING
+    ======================================================*/
+
+    --space-xs: 6px;
+    --space-sm: 10px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --space-2xl: 48px;
+
+    /*======================================================
+      SHADOWS
+    ======================================================*/
+
+    --shadow-sm:
+        0 2px 6px rgba(0,0,0,.15);
+
+    --shadow-md:
+        0 8px 20px rgba(0,0,0,.25);
+
+    --shadow-lg:
+        0 16px 40px rgba(0,0,0,.35);
+
+    /*======================================================
+      TYPOGRAPHY
+    ======================================================*/
+
+    --font-family:
+        Inter,
+        "Segoe UI",
+        sans-serif;
+
+    --text-xs: .75rem;
+    --text-sm: .875rem;
+    --text-md: 1rem;
+    --text-lg: 1.25rem;
+    --text-xl: 1.75rem;
+    --text-2xl: 2.25rem;
+
+    /*======================================================
+      ANIMATION
+    ======================================================*/
+
+    --transition-fast: 150ms ease;
+    --transition: 220ms ease;
+    --transition-slow: 350ms ease;
+}

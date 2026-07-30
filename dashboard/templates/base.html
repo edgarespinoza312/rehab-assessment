@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+
+        {% block title %}
+        NeuroMotion
+        {% endblock %}
+
+    </title>
+
+    <!-- ===================================================== -->
+    <!-- Fonts -->
+    <!-- ===================================================== -->
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <!-- ===================================================== -->
+    <!-- Styles -->
+    <!-- ===================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/variables.css') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/layout.css') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/components.css') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/pages.css') }}"
+    >
+
+</head>
+
+<body>
+
+    <!-- ===================================================== -->
+    <!-- Application Header -->
+    <!-- ===================================================== -->
+
+    <header class="topbar">
+
+        <div class="branding">
+
+            <h1>NeuroMotion</h1>
+
+            <p>
+                AI-Powered Upper Limb Rehabilitation Assessment
+            </p>
+
+        </div>
+
+        <nav class="workflow-nav">
+
+            <a href="/">Assessment Setup</a>
+
+            <span class="workflow-divider"></span>
+
+            <a href="/assessment">Assessment Session</a>
+
+            <span class="workflow-divider"></span>
+
+            <a href="/report">Assessment Report</a>
+
+        </nav>
+
+    </header>
+
+    <!-- ===================================================== -->
+    <!-- Page Content -->
+    <!-- ===================================================== -->
+
+    <main class="app-content">
+
+        {% block content %}
+        {% endblock %}
+
+    </main>
+
+    <!-- ===================================================== -->
+    <!-- Page Scripts -->
+    <!-- ===================================================== -->
+
+    {% block scripts %}
+    {% endblock %}
+
+</body>
+
+</html>

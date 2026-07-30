@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}
+Assessment Setup
+{% endblock %}
+
+{% block content %}
+
+<div class="selection-container">
+
+    <!-- ===================================================== -->
+    <!-- Page Header -->
+    <!-- ===================================================== -->
+
+    <header class="page-header">
+
+        <h1>Assessment Setup</h1>
+
+        <p class="panel-subtitle">
+            Configure the rehabilitation assessment before beginning analysis.
+        </p>
+
+    </header>
+
+    <!-- ===================================================== -->
+    <!-- Main Content -->
+    <!-- ===================================================== -->
+
+    <section class="selection-content">
+
+        <!-- ================================================ -->
+        <!-- Anatomy Preview -->
+        <!-- ================================================ -->
+
+        <section class="card muscle-panel">
+
+            <div class="panel-header">
+
+                <h2>Anatomy Preview</h2>
+
+                <p class="panel-subtitle">
+                    Visual reference of the muscle groups involved in the selected exercise.
+                </p>
+
+            </div>
+
+            <img
+                id="muscle-model"
+                src="{{ url_for('static', filename='images/anatomy/right_bicep_curl.png') }}"
+                alt="Exercise Anatomy"
+            >
+
+            <div class="muscle-groups">
+
+                <div class="muscle-group">
+
+                    <h3>Primary Muscles</h3>
+
+                    <ul id="primary-muscles"></ul>
+
+                </div>
+
+                <div class="muscle-group">
+
+                    <h3>Secondary Muscles</h3>
+
+                    <ul id="secondary-muscles"></ul>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ================================================ -->
+        <!-- Assessment Configuration -->
+        <!-- ================================================ -->
+
+        <section class="card exercise-panel">
+
+            <div class="panel-header">
+
+                <h2>Assessment Configuration</h2>
+
+                <p class="panel-subtitle">
+                    Select the rehabilitation exercise to evaluate during this assessment session.
+                </p>
+
+            </div>
+
+            <form
+                id="exercise-form"
+                action="{{ url_for('start_assessment') }}"
+                method="POST"
+            >
+
+                <!-- Carry the selected patient through the assessment -->
+                <input
+                    type="hidden"
+                    name="patient_id"
+                    value="{{ patient_id }}"
+                >
+
+                {% for profile in profiles %}
+
+                <label class="exercise-option">
+
+                    <input
+                        type="radio"
+                        name="exercise"
+                        value="{{ profile.exercise.name }}"
+                        {% if loop.first %}checked{% endif %}
+                    >
+
+                    {{ profile.display_name }}
+
+                </label>
+
+                {% endfor %}
+
+                <hr class="section-divider">
+
+                <button
+                    class="begin-button"
+                    type="submit"
+                >
+                    Begin Assessment
+                </button>
+
+            </form>
+
+        </section>
+
+    </section>
+
+    <!-- ===================================================== -->
+    <!-- Exercise Information -->
+    <!-- ===================================================== -->
+
+    <section
+        class="card information-panel"
+        id="information-panel"
+    >
+
+        <div class="panel-header">
+
+            <h2>Exercise Information</h2>
+
+            <p class="panel-subtitle">
+                Technical information for the selected rehabilitation exercise.
+            </p>
+
+        </div>
+
+        <h3 id="exercise-name">
+
+            {% if profiles %}
+                {{ profiles[0].display_name }}
+            {% else %}
+                --
+            {% endif %}
+
+        </h3>
+
+        <hr class="section-divider">
+
+        <div class="description">
+
+            <h4>Description</h4>
+
+            <p id="exercise-description">
+
+                {% if profiles %}
+                    {{ profiles[0].description }}
+                {% else %}
+                    --
+                {% endif %}
+
+            </p>
+
+        </div>
+
+        <div class="description">
+
+            <h4>Primary Joint</h4>
+
+            <p id="primary-joint">
+
+                {% if profiles %}
+                    {{ profiles[0].primary_joint }}
+                {% else %}
+                    --
+                {% endif %}
+
+            </p>
+
+        </div>
+
+        <div class="description">
+
+            <h4>Movement Plane</h4>
+
+            <p id="movement-plane">
+
+                {% if profiles %}
+                    {{ profiles[0].movement_plane }}
+                {% else %}
+                    --
+                {% endif %}
+
+            </p>
+
+        </div>
+
+        <div class="description">
+
+            <h4>Target Side</h4>
+
+            <p id="target-side">
+
+                {% if profiles %}
+                    {{ profiles[0].target_side }}
+                {% else %}
+                    --
+                {% endif %}
+
+            </p>
+
+        </div>
+
+    </section>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script
+    src="{{ url_for('static', filename='js/selection.js') }}"
+></script>
+
+{% endblock %}

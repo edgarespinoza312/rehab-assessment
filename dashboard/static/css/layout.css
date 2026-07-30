@@ -1,0 +1,136 @@
+/* ========================================================== */
+/* Global Reset                                                */
+/* ========================================================== */
+
+* {
+
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+
+}
+
+html,
+body {
+
+    min-height: 100%;
+
+}
+
+body {
+
+    font-family: var(--font-family);
+
+    background: var(--background);
+
+    color: var(--text-primary);
+
+}
+
+/* ========================================================== */
+/* Application Header                                          */
+/* ========================================================== */
+
+.topbar {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    padding: 22px 40px;
+
+    background: var(--surface);
+
+    border-bottom: 1px solid rgba(255,255,255,.08);
+
+    position: sticky;
+
+    top: 0;
+
+    z-index: 100;
+
+}
+
+/* ========================================================== */
+/* Branding                                                    */
+/* ========================================================== */
+
+.branding h1 {
+
+    font-size: 2rem;
+
+    font-weight: 700;
+
+    letter-spacing: -.03em;
+
+}
+
+.branding p {
+
+    margin-top: 6px;
+
+    color: var(--text-secondary);
+
+    font-size: .95rem;
+
+}
+
+/* ========================================================== */
+/* Workflow Navigation                                         */
+/* ========================================================== */
+
+.workflow-nav {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 18px;
+
+}
+
+.workflow-nav a {
+
+    text-decoration: none;
+
+    color: var(--text-secondary);
+
+    font-size: .95rem;
+
+    font-weight: 500;
+
+    transition: var(--transition);
+
+}
+
+.workflow-nav a:hover {
+
+    color: white;
+
+}
+
+.workflow-divider {
+
+    width: 36px;
+
+    height: 2px;
+
+    background: rgba(255,255,255,.15);
+
+}
+
+/* ========================================================== */
+/* Main Content                                                */
+/* ========================================================== */
+
+.app-content {
+
+    max-width: 1400px;
+
+    margin: 40px auto;
+
+    padding: 0 30px;
+
+}

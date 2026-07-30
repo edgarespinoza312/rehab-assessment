@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}
+Assessment Session
+{% endblock %}
+
+{% block content %}
+
+<div class="session-container">
+
+    <!-- ===================================================== -->
+    <!-- Session Header -->
+    <!-- ===================================================== -->
+
+    <section class="card session-status">
+
+        <div class="status-left">
+
+            <h1>Assessment Session</h1>
+
+            <p class="panel-subtitle">
+
+                Live analysis of the current rehabilitation exercise.
+
+            </p>
+
+            <p>
+
+                Exercise:
+                <strong id="exercise-name">
+
+                    Left Bicep Curl
+
+                </strong>
+
+            </p>
+
+        </div>
+
+        <div class="status-right">
+
+            <div class="status-item">
+
+                <span class="status-label">
+
+                    Tracking
+
+                </span>
+
+                <span
+                    id="tracking-status"
+                    class="status-badge status-warning"
+                >
+
+                    Inactive
+
+                </span>
+
+            </div>
+
+            <div class="status-item">
+
+                <span class="status-label">
+
+                    Repetitions
+
+                </span>
+
+                <strong id="rep-count">
+
+                    0
+
+                </strong>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- ===================================================== -->
+    <!-- Main Session Layout -->
+    <!-- ===================================================== -->
+
+    <section class="session-grid">
+
+        <!-- ================================================ -->
+        <!-- Live Camera -->
+        <!-- ================================================ -->
+
+        <section class="card camera-panel">
+
+            <div class="panel-header">
+
+                <h2>Live Camera Feed</h2>
+
+                <p class="panel-subtitle">
+
+                    Real-time pose estimation and biomechanical analysis.
+
+                </p>
+
+            </div>
+
+            <img
+                src="{{ url_for('video_feed') }}"
+                alt="Live Camera Feed"
+            >
+
+        </section>
+
+        <!-- ================================================ -->
+        <!-- Sidebar -->
+        <!-- ================================================ -->
+
+        <aside class="session-sidebar">
+
+            <!-- ======================================== -->
+            <!-- Live Assessment -->
+            <!-- ======================================== -->
+
+            <section class="card metrics-panel">
+
+                <div class="panel-header">
+
+                    <h2>Live Assessment</h2>
+
+                </div>
+
+                <div class="metric">
+
+                    <span>Joint Angles</span>
+
+                </div>
+
+                <div id="joint-angles">
+
+                    <p>Waiting for assessment...</p>
+
+                </div>
+
+                <hr class="section-divider">
+
+                <div class="metric">
+
+                    <span>Range of Motion</span>
+
+                    <strong id="rom">
+
+                        --°
+
+                    </strong>
+
+                </div>
+
+            </section>
+
+            <!-- ======================================== -->
+            <!-- Performance -->
+            <!-- ======================================== -->
+
+            <section class="card performance-panel">
+
+                <div class="panel-header">
+
+                    <h2>Performance</h2>
+
+                </div>
+
+                <div class="metric">
+
+                    <span>Average Score</span>
+
+                    <strong id="average-score">
+
+                        0%
+
+                    </strong>
+
+                </div>
+
+                <div class="metric">
+
+                    <span>Current Repetition</span>
+
+                    <strong id="current-score">
+
+                        0%
+
+                    </strong>
+
+                </div>
+
+                <div class="metric">
+
+                    <span>Best Repetition</span>
+
+                    <strong id="best-score">
+
+                        0%
+
+                    </strong>
+
+                </div>
+
+                <div class="metric">
+
+                    <span>Trend</span>
+
+                    <strong id="trend">
+
+                        Collecting Data
+
+                    </strong>
+
+                </div>
+
+            </section>
+
+            <!-- ======================================== -->
+            <!-- Clinical Feedback -->
+            <!-- ======================================== -->
+
+            <section class="card feedback-panel">
+
+                <div class="panel-header">
+
+                    <h2>Clinical Feedback</h2>
+
+                    <p class="panel-subtitle">
+
+                        Live observations generated during the assessment.
+
+                    </p>
+
+                </div>
+
+                <ul
+                    id="feedback-list"
+                    class="clinical-list"
+                >
+
+                    <li>
+
+                        Waiting for first repetition...
+
+                    </li>
+
+                </ul>
+
+            </section>
+
+            <!-- ======================================== -->
+            <!-- Session Controls -->
+            <!-- ======================================== -->
+
+            <section class="card controls-panel">
+
+                <div class="panel-header">
+
+                    <h2>Session Controls</h2>
+
+                </div>
+
+                <button
+                    class="btn btn-secondary"
+                    type="button"
+                    disabled
+                >
+
+                    Pause Assessment (Coming Soon)
+
+                </button>
+
+                <div style="height:16px;"></div>
+
+                <form
+                    action="{{ url_for('finish_assessment') }}"
+                    method="POST"
+                >
+
+                    <button
+                        class="begin-button"
+                        type="submit"
+                    >
+
+                        Finish Assessment
+
+                    </button>
+
+                </form>
+
+            </section>
+
+        </aside>
+
+    </section>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script
+    src="{{ url_for('static', filename='js/dashboard.js') }}"
+></script>
+
+{% endblock %}

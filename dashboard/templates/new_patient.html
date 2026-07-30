@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Patient | Neuromotion Clinical Portal</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    background:#f4f7fb;
+    color:#1f2937;
+}
+
+.wrapper{
+    max-width:950px;
+    margin:50px auto;
+    padding:0 30px;
+}
+
+.header{
+    margin-bottom:30px;
+}
+
+.portal{
+    color:#2563eb;
+    font-size:14px;
+    font-weight:bold;
+    letter-spacing:1px;
+    text-transform:uppercase;
+}
+
+.header h1{
+    margin-top:8px;
+    font-size:40px;
+}
+
+.subtitle{
+    margin-top:10px;
+    color:#6b7280;
+}
+
+.card{
+    background:white;
+    border-radius:18px;
+    padding:35px;
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
+}
+
+.section{
+    margin-bottom:30px;
+}
+
+.section h2{
+    margin-bottom:20px;
+    font-size:22px;
+    color:#2563eb;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:22px;
+}
+
+.field{
+    display:flex;
+    flex-direction:column;
+}
+
+.field.full{
+    grid-column:1 / -1;
+}
+
+label{
+    margin-bottom:8px;
+    font-weight:bold;
+}
+
+input,
+select,
+textarea{
+    width:100%;
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:10px;
+    font-size:15px;
+    transition:.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+    outline:none;
+    border-color:#2563eb;
+    box-shadow:0 0 0 3px rgba(37,99,235,.15);
+}
+
+textarea{
+    resize:vertical;
+    min-height:140px;
+}
+
+.buttons{
+    display:flex;
+    gap:14px;
+    margin-top:10px;
+}
+
+button{
+    background:#2563eb;
+    color:white;
+    border:none;
+    padding:14px 24px;
+    border-radius:10px;
+    font-size:15px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#1d4ed8;
+}
+
+.cancel{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:14px 24px;
+    border:1px solid #cbd5e1;
+    border-radius:10px;
+    text-decoration:none;
+    color:#374151;
+    font-weight:bold;
+    background:white;
+}
+
+.cancel:hover{
+    background:#f8fafc;
+}
+
+@media(max-width:700px){
+
+    .grid{
+        grid-template-columns:1fr;
+    }
+
+    .buttons{
+        flex-direction:column;
+    }
+
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+
+    <div class="header">
+
+        <div class="portal">
+            Neuromotion Clinical Portal
+        </div>
+
+        <h1>Create New Patient</h1>
+
+        <p class="subtitle">
+            Register a patient before beginning rehabilitation assessments.
+        </p>
+
+    </div>
+
+    <div class="card">
+
+        <form method="POST">
+
+            <div class="section">
+
+                <h2>Patient Information</h2>
+
+                <div class="grid">
+
+                    <div class="field">
+                        <label>First Name</label>
+                        <input type="text" name="first_name" required>
+                    </div>
+
+                    <div class="field">
+                        <label>Last Name</label>
+                        <input type="text" name="last_name" required>
+                    </div>
+
+                    <div class="field">
+                        <label>Date of Birth</label>
+                        <input type="date" name="date_of_birth" required>
+                    </div>
+
+                    <div class="field">
+                        <label>Sex</label>
+                        <select name="sex" required>
+                            <option value="">Select...</option>
+                            <option>Male</option>
+                            <option>Female</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="section">
+
+                <h2>Clinical Information</h2>
+
+                <div class="grid">
+
+                    <div class="field">
+                        <label>Diagnosis</label>
+                        <input
+                            type="text"
+                            name="diagnosis"
+                            placeholder="Example: Left Hemiparesis"
+                            required>
+                    </div>
+
+                    <div class="field">
+                        <label>Affected Side</label>
+                        <select name="affected_side" required>
+                            <option value="">Select...</option>
+                            <option>Left</option>
+                            <option>Right</option>
+                            <option>Bilateral</option>
+                        </select>
+                    </div>
+
+                    <div class="field full">
+                        <label>Therapist Notes</label>
+                        <textarea
+                            name="therapist_notes"
+                            placeholder="Enter any relevant clinical observations..."></textarea>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="buttons">
+
+                <button type="submit">
+                    + Create Patient
+                </button>
+
+                <a class="cancel" href="{{ url_for('patient_registry') }}">
+                    Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+</body>
+</html>
