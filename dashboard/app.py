@@ -79,7 +79,7 @@ migrate.init_app(app, db)
 # ==========================================================
 
 vision = VisionEngine(
-    camera_index=1,
+    camera_index=0,
 )
 
 pose = PoseEngine()
