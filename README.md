@@ -5,6 +5,11 @@ A real-time AI-powered rehabilitation assessment system built on the NVIDIA Jets
 This project uses computer vision and human pose estimation to analyze rehabilitation exercises in real time. By extracting skeletal keypoints from a live camera feed, the system evaluates movement quality and provides immediate performance feedback without requiring wearable sensors.
 
 ---
+## Demo
+
+https://drive.google.com/file/d/1iApZj66ajdM0dbQ_WPKHrKvRF8sHPyiU/view?usp=sharing
+
+---
 
 ## Overview
 
