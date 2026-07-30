@@ -114,7 +114,7 @@ pip install -r requirements.txt
 Start the application with
 
 ```bash
-python app.py
+python -m dashboard.app
 ```
 
 The application will:
