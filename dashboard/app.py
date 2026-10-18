@@ -188,6 +188,13 @@ poll_request_ids = itertools.count(1)
 poll_request_counts = {"active": 0, "by_endpoint": {}}
 
 
+def _ensure_camera_started() -> None:
+    """Initialize the shared camera on demand, not during module import."""
+    with video_camera_start_lock:
+        if vision.camera is None:
+            vision.start()
+
+
 def runtime_context_for_request(*, create: bool = True):
     from flask import session as flask_session
 
@@ -2096,9 +2103,7 @@ def video_feed():
         video_diagnostics_state["active_consumers"] = 1
         video_diagnostics_state["stream_error"] = None
     try:
-        with video_camera_start_lock:
-            if vision.camera is None:
-                vision.start()
+        _ensure_camera_started()
     except Exception:
         logger.exception("Unable to initialize camera for video stream")
         with video_diagnostics_lock:
