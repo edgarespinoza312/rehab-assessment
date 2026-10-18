@@ -376,6 +376,14 @@ def _reset_workout_pipeline_locked(
     context.display_pose_continuity.clear()
 
 
+def _get_or_404(model, primary_key):
+    """Fetch a record through the SQLAlchemy session or abort with HTTP 404."""
+    record = db.session.get(model, primary_key)
+    if record is None:
+        abort(404)
+    return record
+
+
 def _current_user_can_access_patient(
     patient_id: int | None,
     capability: Capability = Capability.VIEW_OWN_PATIENT_DATA,
@@ -750,9 +758,7 @@ def clinician_patient_profile(patient_id):
 def update_assessment_notes(assessment_id):
     require_csrf()
 
-    assessment = AssessmentRecord.query.get_or_404(
-        assessment_id
-    )
+    assessment = _get_or_404(AssessmentRecord, assessment_id)
     if not _current_user_can_access_patient(
         assessment.patient_id,
         Capability.VIEW_ASSIGNED_PATIENT,
@@ -776,9 +782,7 @@ def view_assessment(assessment_id):
 
     import json
 
-    assessment = AssessmentRecord.query.get_or_404(
-        assessment_id
-    )
+    assessment = _get_or_404(AssessmentRecord, assessment_id)
     if not _current_user_can_access_patient(
         assessment.patient_id,
     ):
@@ -1055,7 +1059,7 @@ def patient_registry():
 @require_capability(Capability.VIEW_ASSIGNED_PATIENT)
 def patient_profile(patient_id):
 
-    patient = Patient.query.get_or_404(patient_id)
+    patient = _get_or_404(Patient, patient_id)
 
     assessments = sorted(
         patient.assessments,
@@ -1463,7 +1467,7 @@ def delete_assessment(assessment_id):
         return jsonify({"error": "forbidden"}), 403
     require_csrf()
 
-    assessment = AssessmentRecord.query.get_or_404(assessment_id)
+    assessment = _get_or_404(AssessmentRecord, assessment_id)
     patient_id = assessment.patient_id
     if not authorize_patient_access(
         current_identity(),
@@ -1487,7 +1491,7 @@ def delete_assessment(assessment_id):
 def delete_patient(patient_id):
     require_csrf()
 
-    patient = Patient.query.get_or_404(patient_id)
+    patient = _get_or_404(Patient, patient_id)
 
     db.session.delete(patient)
     db.session.commit()
@@ -1901,7 +1905,7 @@ def report():
     patient = None
     patient_id = report_snapshot.get("patient_id")
     if patient_id is not None:
-        patient = Patient.query.get(patient_id)
+        patient = db.session.get(Patient, patient_id)
 
     return render_template(
         "report.html",
