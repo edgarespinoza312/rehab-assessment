@@ -296,8 +296,6 @@ def get_patient_progression_context(
     prescription decisions are made here.
     """
     if isinstance(recent_limit, bool) or not isinstance(recent_limit, int):
-        raise ValueError("recent_limit must be an integer")
-    if isinstance(recent_limit, bool) or not isinstance(recent_limit, int):
         raise ValueError("recent_limit must be a positive integer")
     if recent_limit <= 0:
         raise ValueError("recent_limit must be a positive integer")
