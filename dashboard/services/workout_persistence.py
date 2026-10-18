@@ -58,10 +58,9 @@ def create_workout_plan(
         raise ValueError("workout plan exercises must be WorkoutPrescription values")
 
     for prescription in prescriptions:
-        definition = BUILTIN_EXERCISES.get(prescription.exercise_id)
-        if definition is None:
-            raise ValueError("unknown exercise identifier")
-        profile = definition.profile_for_side(prescription.side)
+        profile = BUILTIN_EXERCISES.get(prescription.exercise_id).profile_for_side(
+            prescription.side
+        )
         if profile.target_side.lower() != prescription.side:
             raise ValueError("exercise profile side does not match prescription side")
 
