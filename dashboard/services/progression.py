@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from core.workout.registry import BUILTIN_EXERCISES
 from dashboard.database import db
+MAX_RECENT_PROGRESSION_LIMIT = 100
+
+
 from dashboard.models import (
     AssessmentRecord,
     CompletedWorkoutSession,
@@ -296,6 +299,10 @@ def get_patient_progression_context(
         raise ValueError("recent_limit must be an integer")
     if recent_limit <= 0:
         raise ValueError("recent_limit must be positive")
+    if recent_limit > MAX_RECENT_PROGRESSION_LIMIT:
+        raise ValueError(
+            f"recent_limit must not exceed {MAX_RECENT_PROGRESSION_LIMIT}"
+        )
 
     records = get_patient_progression(
         patient_id,
