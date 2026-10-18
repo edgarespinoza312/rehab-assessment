@@ -114,6 +114,27 @@ class WorkoutPersistenceTests(unittest.TestCase):
         )
         self.assertEqual(len(plan.description), 10_000)
 
+    def test_workout_plan_patient_id_is_validated_by_persistence_service(self):
+        exercises = (WorkoutPrescription("bicep_curl", "left", 4),)
+        invalid_ids = (999, True, "1", 0, -1)
+        for patient_id in invalid_ids:
+            with self.subTest(patient_id=patient_id):
+                with self.assertRaisesRegex(ValueError, "patient_id|patient does not exist"):
+                    create_workout_plan(
+                        "Invalid patient reference",
+                        exercises,
+                        patient_id=patient_id,
+                    )
+                self.assertEqual(WorkoutPlan.query.count(), 0)
+                self.assertEqual(ExerciseIdentity.query.count(), 0)
+
+        plan = create_workout_plan(
+            "Valid patient reference",
+            exercises,
+            patient_id=self.patient.patient_id,
+        )
+        self.assertEqual(plan.patient_id, self.patient.patient_id)
+
     def test_workout_prescription_values_match_storage_limits(self):
         with self.assertRaisesRegex(ValueError, "between 1 and 1000"):
             WorkoutPrescription("bicep_curl", "left", 1001)
