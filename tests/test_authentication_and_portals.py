@@ -219,6 +219,27 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 403)
         self.assertEqual(self.client.get("/api/patients/1/progression").status_code, 403)
 
+    def test_admin_and_operator_cannot_open_assessment_camera_workflow(self):
+        for email in ("admin@example.test", "operator@example.test"):
+            with self.subTest(email=email):
+                self.client = app.test_client()
+                self._login(email, email.split("@")[0].upper())
+                response = self.client.get("/assessment")
+                self.assertEqual(response.status_code, 403)
+                # Denying the page must not create a runtime that exposes video.
+                self.assertEqual(self.client.get("/video_feed").status_code, 404)
+                self.assertEqual(self.client.get("/video_status").status_code, 404)
+
+    def test_camera_stream_requires_patient_linked_runtime_session(self):
+        self._login("clinician@example.test", "CLINICIAN")
+        # Opening the page directly creates a runtime but does not start an assessment.
+        self.assertEqual(
+            self.client.get("/assessment?patient_id=1").status_code,
+            200,
+        )
+        self.assertEqual(self.client.get("/video_feed").status_code, 404)
+        self.assertEqual(self.client.get("/video_status").status_code, 404)
+
     def test_clinician_patient_profile_alias_reaches_protected_profile(self):
         self._login("clinician@example.test", "CLINICIAN")
         response = self.client.get(

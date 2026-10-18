@@ -1681,11 +1681,19 @@ def assessment_session():
     Displays the live assessment interface.
     """
 
-    patient_id = request.args.get("patient_id", type=int)
     identity = current_identity()
+    if not authorize_patient_access(
+        identity,
+        Capability.ACCESS_ASSESSMENT_SETUP,
+        None,
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    patient_id = request.args.get("patient_id", type=int)
     if any(role.value == "PATIENT" for role in identity.roles) and not any(
         role.value == "CLINICIAN" for role in identity.roles
     ):
+        if identity.patient_id is None:
+            return jsonify({"error": "patient profile is not linked"}), 403
         patient_id = identity.patient_id
 
     print(f"Patient ID: {patient_id}")
@@ -1917,6 +1925,8 @@ def video_feed():
             if context.workout_runtime is not None
             else None
         )
+    if runtime_patient_id is None:
+        return jsonify({"error": "no patient-linked assessment session"}), 404
     patient_access_error = _require_runtime_patient_access(runtime_patient_id)
     if patient_access_error is not None:
         return patient_access_error
@@ -1966,6 +1976,8 @@ def video_status():
             if context.workout_runtime is not None
             else None
         )
+    if runtime_patient_id is None:
+        return jsonify({"error": "no patient-linked assessment session"}), 404
     patient_access_error = _require_runtime_patient_access(runtime_patient_id)
     if patient_access_error is not None:
         return patient_access_error
