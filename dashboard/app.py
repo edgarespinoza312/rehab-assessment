@@ -1322,7 +1322,14 @@ def _parse_progression_date(value: str | None, parameter: str):
     try:
         if len(value) == 10:
             return date_type.fromisoformat(value)
-        parsed = datetime.fromisoformat(value)
+        # Python versions before 3.11 do not accept the ISO-8601 "Z"
+        # UTC designator in fromisoformat; normalize it to an explicit offset.
+        normalized_value = (
+            value[:-1] + "+00:00"
+            if value.endswith("Z")
+            else value
+        )
+        parsed = datetime.fromisoformat(normalized_value)
         if parsed.tzinfo is not None:
             # Persisted timestamps are naive UTC; normalize offset-aware input
             # to the same comparison/query convention.
