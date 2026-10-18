@@ -150,6 +150,10 @@ def create_review_event(
         note=normalize_note(note),
         reviewed_at=reviewed_at or datetime.utcnow(),
     )
-    db.session.add(event)
-    db.session.commit()
+    try:
+        db.session.add(event)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return event
