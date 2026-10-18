@@ -109,13 +109,14 @@ class ProgressionReviewApiTests(unittest.TestCase):
         )
         self._add(day=1)
         url = base + "?exercise_id=bicep_curl&side=right"
-        self.assertEqual(
-            self._post(url, json={
-                "disposition": "INVALID",
-                "reviewer_reference": "reviewer",
-            }).status_code,
-            400,
-        )
+        invalid_dispositions = ["INVALID", [], {}, 123, None]
+        for disposition in invalid_dispositions:
+            with self.subTest(disposition=disposition):
+                response = self._post(url, json={
+                    "disposition": disposition,
+                    "reviewer_reference": "reviewer",
+                })
+                self.assertEqual(response.status_code, 400)
         authenticated_review = self._post(url, json={
             "disposition": "REVIEWED",
             "reviewer_reference": "",

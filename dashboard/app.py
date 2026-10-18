@@ -1526,7 +1526,7 @@ def patient_progression_advisory_reviews_api(patient_id):
     if not isinstance(payload, dict):
         return jsonify({"error": "JSON object body is required"}), 400
     disposition = payload.get("disposition")
-    if disposition not in VALID_DISPOSITIONS:
+    if not isinstance(disposition, str) or disposition not in VALID_DISPOSITIONS:
         return jsonify({"error": "invalid disposition"}), 400
     try:
         event = create_review_event(
