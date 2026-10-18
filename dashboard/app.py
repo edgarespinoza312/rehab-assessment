@@ -415,6 +415,45 @@ def _active_runtime_patient_id(context) -> int | None:
         return context.session.patient_id
     return None
 
+def _release_runtime_context(runtime_id: str | None) -> None:
+    """Expire and release one runtime, including its pose backend resources."""
+    context = runtime_registry.get(runtime_id)
+    if context is None:
+        return
+
+    try:
+        with context.lock:
+            context.lifecycle = RuntimeLifecycle.EXPIRED
+            context.touch()
+            context.session = None
+            context.completed_session = None
+            context.workout_runtime = None
+            context.session_manager.clear()
+            context.display_pose_continuity.clear()
+            try:
+                context.pose.close()
+            except Exception:
+                logger.exception(
+                    "Failed to close perception backend for runtime %s",
+                    context.runtime_id,
+                )
+    finally:
+        runtime_registry.remove(runtime_id)
+
+
+@app.before_request
+def release_orphaned_runtime():
+    """Release runtime state when its cookie no longer identifies an active user."""
+    from flask import session as flask_session
+
+    if current_identity().is_authenticated:
+        return None
+    runtime_id = flask_session.get(RUNTIME_SESSION_KEY)
+    if runtime_id is not None:
+        _release_runtime_context(runtime_id)
+        flask_session.pop(RUNTIME_SESSION_KEY, None)
+    return None
+
 # ==========================================================
 # Routes
 # ==========================================================
@@ -558,15 +597,7 @@ def logout():
     require_csrf()
     from flask import session as flask_session
     runtime_id = flask_session.get(RUNTIME_SESSION_KEY)
-    context = runtime_registry.get(runtime_id)
-    if context is not None:
-        with context.lock:
-            if context.lifecycle in {
-                RuntimeLifecycle.CREATED,
-                RuntimeLifecycle.ACTIVE,
-            }:
-                context.lifecycle = RuntimeLifecycle.EXPIRED
-        runtime_registry.remove(runtime_id)
+    _release_runtime_context(runtime_id)
     logout_user()
     return redirect(url_for("login"))
 
@@ -2375,6 +2406,12 @@ def _generate_frames(context=None):
     camera_failure_policy = CameraFailurePolicy()
     while True:
         with context.lock:
+            if context.lifecycle in {
+                RuntimeLifecycle.COMPLETED,
+                RuntimeLifecycle.CANCELLED,
+                RuntimeLifecycle.EXPIRED,
+            }:
+                return
             session = context.session
             workout_runtime = context.workout_runtime
             runtime_mode = context.runtime_mode

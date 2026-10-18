@@ -105,9 +105,45 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
         self._start_assessment(client, 1)
-        disable_user(self.a.user_id)
-        response = client.get("/session")
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+
+        from unittest.mock import patch
+        with patch.object(context.pose, "close") as close_pose:
+            disable_user(self.a.user_id)
+            response = client.get("/session")
+
         self.assertIn(response.status_code, {302, 401})
+        self.assertIsNone(runtime_registry.get(runtime_id))
+        self.assertEqual(close_pose.call_count, 1)
+        self.assertIsNone(context.session)
+        with client.session_transaction() as state:
+            self.assertNotIn(RUNTIME_SESSION_KEY, state)
+
+    def test_logout_releases_runtime_and_closes_pose_backend(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+            csrf = state["revaliv_csrf_token"]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+
+        from unittest.mock import patch
+        with patch.object(context.pose, "close") as close_pose:
+            response = client.post("/logout", data={"csrf_token": csrf})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(close_pose.call_count, 1)
+        self.assertIsNone(runtime_registry.get(runtime_id))
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.EXPIRED)
+        self.assertIsNone(context.session)
+        self.assertIsNone(context.completed_session)
+        self.assertIsNone(context.workout_runtime)
+
 
     def test_workout_cancellation_does_not_change_other_runtime(self):
         client_a = app.test_client()
