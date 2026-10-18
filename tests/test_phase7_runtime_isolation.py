@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import patch
 
-from dashboard.app import app, runtime_registry
+from dashboard.app import app, runtime_registry, _generate_frames
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.runtime_context import RuntimeLifecycle
@@ -144,6 +145,39 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIsNone(context.completed_session)
         self.assertIsNone(context.workout_runtime)
 
+
+    def test_finishing_legacy_assessment_marks_runtime_completed(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+            csrf = state["revaliv_csrf_token"]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+
+        response = client.post("/finish", data={"csrf_token": csrf})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.COMPLETED)
+        self.assertIsNotNone(context.completed_session)
+
+    def test_frame_generator_stops_if_assessment_finishes_during_capture(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        # Model the state change between loop admission and frame processing.
+        context.completed_session = {"patient_id": 1}
+
+        frames = _generate_frames(context)
+        with patch("dashboard.app.vision.get_frame") as get_frame:
+            with self.assertRaises(StopIteration):
+                next(frames)
+        get_frame.assert_not_called()
 
     def test_workout_cancellation_does_not_change_other_runtime(self):
         client_a = app.test_client()

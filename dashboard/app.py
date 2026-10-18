@@ -1849,6 +1849,10 @@ def finish_assessment():
                 latest.feedback if latest else [],
 
         }
+        if context.lifecycle is RuntimeLifecycle.ACTIVE:
+            context.transition(RuntimeLifecycle.COMPLETING)
+        if context.lifecycle is RuntimeLifecycle.COMPLETING:
+            context.transition(RuntimeLifecycle.COMPLETED)
         _sync_compatibility_context(context)
 
     # End the active assessment.
@@ -2410,7 +2414,7 @@ def _generate_frames(context=None):
                 RuntimeLifecycle.COMPLETED,
                 RuntimeLifecycle.CANCELLED,
                 RuntimeLifecycle.EXPIRED,
-            }:
+            } or _active_runtime_patient_id(context) is None:
                 return
             session = context.session
             workout_runtime = context.workout_runtime
@@ -2473,6 +2477,18 @@ def _generate_frames(context=None):
             # --------------------------------------------------
 
             with context.lock:
+                if (
+                    context.lifecycle in {
+                        RuntimeLifecycle.COMPLETED,
+                        RuntimeLifecycle.CANCELLED,
+                        RuntimeLifecycle.EXPIRED,
+                    }
+                    or _active_runtime_patient_id(context) is None
+                ):
+                    return
+                session = context.session
+                workout_runtime = context.workout_runtime
+                runtime_mode = context.runtime_mode
                 workout_mode = runtime_mode == RuntimeMode.WORKOUT_SESSION.value
                 active_profile = _active_profile_locked(context)
                 exercise_side = getattr(active_profile, "target_side", None)
