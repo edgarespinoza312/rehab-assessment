@@ -24,6 +24,7 @@ from dashboard.models import (
 )
 
 MAX_WORKOUT_PLAN_NAME_LENGTH = 120
+MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH = 10_000
 
 
 def _ensure_exercise_identities() -> None:
@@ -51,6 +52,12 @@ def create_workout_plan(
         )
     if not isinstance(description, str):
         raise ValueError("workout plan description must be text")
+    if len(description) > MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH:
+        raise ValueError(
+            "workout plan description must be at most "
+            f"{MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH} characters"
+        )
+    normalized_description = description.strip()
     if not prescriptions:
         raise ValueError("a workout plan must contain at least one exercise")
     if any(not isinstance(item, WorkoutPrescription) for item in prescriptions):
@@ -68,7 +75,7 @@ def create_workout_plan(
         plan = WorkoutPlan(
             patient_id=patient_id,
             name=normalized_name,
-            description=description.strip() if isinstance(description, str) else "",
+            description=normalized_description,
             exercises=[
                 WorkoutPlanExercise(
                     position=position,
