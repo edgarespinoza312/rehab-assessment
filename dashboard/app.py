@@ -415,6 +415,7 @@ def _active_runtime_patient_id(context) -> int | None:
         return context.session.patient_id
     return None
 
+
 def _has_active_runtime_session(context) -> bool:
     """Check active session state without imposing route-level patient linkage."""
     if context.runtime_mode == RuntimeMode.WORKOUT_SESSION.value:
