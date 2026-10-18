@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Workspace unavailable | Revaliv{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-shell">
+    <section class="auth-card" aria-labelledby="workspace-heading">
+        <div class="auth-brand">Revaliv</div>
+        <h1 id="workspace-heading">No workspace available</h1>
+        <p class="auth-description">
+            Your account is active, but no workspace is assigned to its role.
+            Contact an administrator for access or role review.
+        </p>
+        <form method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="auth-submit" type="submit">Sign out</button>
+        </form>
+    </section>
+</main>
+{% endblock %}

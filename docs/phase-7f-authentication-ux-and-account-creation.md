@@ -34,8 +34,10 @@ linkage are committed, then redirects to `/patient`.
 
 `/admin/accounts` is protected by the centralized `MANAGE_ACCOUNTS` capability,
 which is granted only to ADMIN identities. It supports controlled creation of
-PATIENT, CLINICIAN, ADMIN, and OPERATOR accounts, optional linkage to an
-existing unlinked patient, account listing, and disabling accounts.
+PATIENT, CLINICIAN, and ADMIN accounts, optional linkage to an existing unlinked
+patient, account listing, and disabling accounts. OPERATOR remains a schema role
+for compatibility but is not offered for new accounts until its workspace and
+capabilities are specified.
 
 The route delegates creation and disabling to
 `dashboard/services/user_provisioning.py`; it does not implement a second

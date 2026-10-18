@@ -6,7 +6,9 @@ from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.services.authentication import hash_password
 
-VALID_ROLES = {"PATIENT", "CLINICIAN", "ADMIN", "OPERATOR"}
+# OPERATOR remains in the schema for existing accounts, but is not provisionable
+# until its intended workspace and capabilities are defined.
+VALID_ROLES = {"PATIENT", "CLINICIAN", "ADMIN"}
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 

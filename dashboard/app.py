@@ -484,6 +484,12 @@ def register():
     return render_template("register.html", form=form)
 
 
+@app.route("/access-unavailable")
+@require_auth
+def access_unavailable():
+    return render_template("access_unavailable.html")
+
+
 @app.route("/admin/accounts", methods=["GET", "POST"])
 @require_capability(Capability.MANAGE_ACCOUNTS)
 def admin_accounts():
@@ -505,7 +511,7 @@ def admin_accounts():
                 "admin_accounts.html",
                 users=User.query.order_by(User.created_at.desc()).all(),
                 patients=Patient.query.order_by(Patient.last_name, Patient.first_name).all(),
-                roles=sorted({"PATIENT", "CLINICIAN", "ADMIN", "OPERATOR"}),
+                roles=sorted({"PATIENT", "CLINICIAN", "ADMIN"}),
                 error=str(error),
             ), 400
         return redirect(url_for("admin_accounts"))
@@ -513,7 +519,7 @@ def admin_accounts():
         "admin_accounts.html",
         users=User.query.order_by(User.created_at.desc()).all(),
         patients=Patient.query.order_by(Patient.last_name, Patient.first_name).all(),
-        roles=sorted({"PATIENT", "CLINICIAN", "ADMIN", "OPERATOR"}),
+        roles=sorted({"PATIENT", "CLINICIAN", "ADMIN"}),
     )
 
 
@@ -844,13 +850,22 @@ def selection():
 @require_auth
 def workout_builder():
     identity = current_identity()
+    roles = {role.value for role in identity.roles}
+    patient_role = "PATIENT" in roles
+    clinician_role = "CLINICIAN" in roles
+    if not authorize_patient_access(identity, Capability.CREATE_WORKOUT_PLAN, None):
+        return jsonify({"error": "forbidden"}), 403
+
     patient_id = request.args.get("patient_id", type=int)
-    if any(role.value == "PATIENT" for role in identity.roles) and not any(
-        role.value == "CLINICIAN" for role in identity.roles
-    ):
+    if patient_role and not clinician_role:
         patient_id = identity.patient_id
         if patient_id is None:
             return jsonify({"error": "patient profile is not linked"}), 403
+    elif patient_id is not None and not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+
     if patient_id is not None and db.session.get(Patient, patient_id) is None:
         return jsonify({"error": f"patient {patient_id} does not exist"}), 404
     exercises = [{
@@ -858,9 +873,7 @@ def workout_builder():
         "name": definition.display_name,
         "sides": list(definition.supported_sides),
     } for definition in BUILTIN_EXERCISES]
-    if any(role.value == "PATIENT" for role in identity.roles) and not any(
-        role.value == "CLINICIAN" for role in identity.roles
-    ):
+    if patient_role and not clinician_role:
         patients = [db.session.get(Patient, identity.patient_id)]
     else:
         patients = Patient.query.order_by(
@@ -890,15 +903,24 @@ def save_workout_plan():
     if not isinstance(description, str):
         return jsonify({"error": "description must be text"}), 400
     patient_id = payload.get("patient_id")
-    if any(role.value == "PATIENT" for role in identity.roles) and not any(
-        role.value == "CLINICIAN" for role in identity.roles
-    ):
-        if identity.patient_id is None or patient_id != identity.patient_id:
-            return jsonify({"error": "forbidden"}), 403
     if patient_id is not None and (
         isinstance(patient_id, bool) or not isinstance(patient_id, int)
     ):
         return jsonify({"error": "patient_id must be an integer or null"}), 400
+
+    roles = {role.value for role in identity.roles}
+    patient_role = "PATIENT" in roles
+    clinician_role = "CLINICIAN" in roles
+    if not authorize_patient_access(identity, Capability.CREATE_WORKOUT_PLAN, None):
+        return jsonify({"error": "forbidden"}), 403
+    if patient_role and not clinician_role:
+        if identity.patient_id is None or patient_id != identity.patient_id:
+            return jsonify({"error": "forbidden"}), 403
+    elif patient_id is not None and not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+
     if patient_id is not None and db.session.get(Patient, patient_id) is None:
         return jsonify({"error": f"patient {patient_id} does not exist"}), 404
     exercise_items = payload.get("exercises")

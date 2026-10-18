@@ -165,7 +165,7 @@ def role_landing(identity: IdentityContext) -> str:
         return url_for("clinician_portal")
     if "PATIENT" in {role.value for role in roles}:
         return url_for("patient_home")
-    return url_for("login")
+    return url_for("access_unavailable")
 
 
 def init_auth(app):

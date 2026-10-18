@@ -124,6 +124,22 @@ class Phase7FAuthenticationTests(unittest.TestCase):
         self.assertEqual(self.login(admin, "admin@example.test", "ADMIN").status_code, 302)
         self.assertEqual(admin.get("/admin/accounts").status_code, 200)
 
+    def test_operator_cannot_be_provisioned_until_its_policy_is_defined(self):
+        admin = app.test_client()
+        self.login(admin, "admin@example.test", "ADMIN")
+        html = admin.get("/admin/accounts").get_data(as_text=True)
+        self.assertNotIn('<option value="OPERATOR">', html)
+        response = admin.post("/admin/accounts", data={
+            "csrf_token": self.csrf(admin),
+            "display_name": "Unsupported Operator",
+            "email": "operator-new@example.test",
+            "password": "safe password",
+            "role": "OPERATOR",
+            "patient_id": "0",
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIsNone(User.query.filter_by(email="operator-new@example.test").first())
+
     def test_admin_can_create_and_disable_account_without_client_role_elevation(self):
         client = app.test_client()
         self.login(client, "admin@example.test", "ADMIN")
