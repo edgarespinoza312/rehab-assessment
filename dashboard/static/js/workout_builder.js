@@ -271,6 +271,7 @@
         repetitions.className = "builder-repetitions";
         repetitions.type = "number";
         repetitions.min = "1";
+        repetitions.max = "1000";
         repetitions.step = "1";
         repetitions.value = "10";
         repetitions.required = true;
@@ -280,6 +281,7 @@
         resistance.className = "builder-resistance";
         resistance.type = "number";
         resistance.min = "0";
+        resistance.max = "9999999.999";
         resistance.step = "any";
         resistance.placeholder = "Optional";
         addField(
