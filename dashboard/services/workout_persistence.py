@@ -25,6 +25,7 @@ from dashboard.models import (
 
 MAX_WORKOUT_PLAN_NAME_LENGTH = 120
 MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH = 10_000
+MAX_WORKOUT_PLAN_EXERCISES = 50
 
 
 def _ensure_exercise_identities() -> None:
@@ -60,6 +61,10 @@ def create_workout_plan(
     normalized_description = description.strip()
     if not prescriptions:
         raise ValueError("a workout plan must contain at least one exercise")
+    if len(prescriptions) > MAX_WORKOUT_PLAN_EXERCISES:
+        raise ValueError(
+            f"a workout plan may contain at most {MAX_WORKOUT_PLAN_EXERCISES} exercises"
+        )
     if any(not isinstance(item, WorkoutPrescription) for item in prescriptions):
         raise ValueError("workout plan exercises must be WorkoutPrescription values")
 
