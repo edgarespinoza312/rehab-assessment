@@ -18,6 +18,7 @@ from dashboard.database import db
 from dashboard.models import (
     CompletedWorkoutSession,
     ExerciseIdentity,
+    Patient,
     WorkoutExerciseResult,
     WorkoutPlan,
     WorkoutPlanExercise,
@@ -51,6 +52,15 @@ def create_workout_plan(
         raise ValueError(
             f"workout plan name must be at most {MAX_WORKOUT_PLAN_NAME_LENGTH} characters"
         )
+    if patient_id is not None:
+        if (
+            isinstance(patient_id, bool)
+            or not isinstance(patient_id, int)
+            or patient_id <= 0
+        ):
+            raise ValueError("patient_id must be a positive integer or null")
+        if db.session.get(Patient, patient_id) is None:
+            raise ValueError("patient does not exist")
     if not isinstance(description, str):
         raise ValueError("workout plan description must be text")
     if len(description) > MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH:
