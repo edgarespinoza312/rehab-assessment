@@ -4,6 +4,7 @@ from dashboard.app import app
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.services.authentication import hash_password
+from dashboard.services.user_provisioning import create_user
 
 
 class Phase7FAuthenticationTests(unittest.TestCase):
@@ -149,6 +150,24 @@ class Phase7FAuthenticationTests(unittest.TestCase):
 
         self.assertEqual(Patient.query.count(), initial_patient_count)
         self.assertEqual(User.query.count(), initial_user_count)
+
+    def test_failed_user_creation_does_not_leave_a_new_role(self):
+        patient_role = Role.query.filter_by(name="PATIENT").one()
+        db.session.delete(patient_role)
+        db.session.commit()
+
+        with self.assertRaisesRegex(ValueError, "at least 8 characters"):
+            create_user(
+                display_name="Invalid Patient",
+                email="invalid-patient@example.test",
+                password="short",
+                role="PATIENT",
+            )
+
+        self.assertIsNone(Role.query.filter_by(name="PATIENT").first())
+        self.assertIsNone(
+            User.query.filter_by(email="invalid-patient@example.test").first()
+        )
 
     def test_admin_account_creation_rejects_oversized_fields(self):
         client = app.test_client()
