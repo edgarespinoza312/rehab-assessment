@@ -135,7 +135,7 @@ def create_review_event(
     note: str | None = None,
     reviewed_at: datetime | None = None,
 ) -> ProgressionReviewEvent:
-    if disposition not in VALID_DISPOSITIONS:
+    if not isinstance(disposition, str) or disposition not in VALID_DISPOSITIONS:
         raise ValueError("invalid disposition")
     if not decision.evidence_records:
         raise ValueError("cannot review an advisory with no evidence")
