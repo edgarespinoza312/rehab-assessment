@@ -1,10 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 from dashboard.app import app
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.services.authentication import hash_password
-from dashboard.services.user_provisioning import create_user
+from dashboard.services.user_provisioning import create_user, link_patient
 
 
 class Phase7FAuthenticationTests(unittest.TestCase):
@@ -163,6 +164,25 @@ class Phase7FAuthenticationTests(unittest.TestCase):
                         role=role,
                     )
                 self.assertIsNone(User.query.filter_by(email=email).first())
+
+    def test_patient_link_change_rolls_back_when_commit_fails(self):
+        user = User.query.filter_by(email="clinician@example.test").one()
+        with patch.object(
+            db.session,
+            "commit",
+            side_effect=RuntimeError("commit failed"),
+        ), patch.object(
+            db.session,
+            "rollback",
+            wraps=db.session.rollback,
+        ) as rollback:
+            with self.assertRaisesRegex(RuntimeError, "commit failed"):
+                link_patient(user.user_id, 1)
+            rollback.assert_called_once()
+
+        db.session.expire_all()
+        stored_user = db.session.get(User, user.user_id)
+        self.assertIsNone(stored_user.patient_id)
 
     def test_failed_user_creation_does_not_leave_a_new_role(self):
         patient_role = Role.query.filter_by(name="PATIENT").one()
