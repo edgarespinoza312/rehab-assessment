@@ -39,6 +39,9 @@ _SECRET_KEY, _SESSION_COOKIE_SECURE = resolve_security_settings(os.environ)
 
 
 class Config:
+    # Bound request bodies to reduce memory pressure from oversized submissions.
+    MAX_CONTENT_LENGTH = 1_048_576
+
     SECRET_KEY = _SECRET_KEY
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
