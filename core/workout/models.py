@@ -13,6 +13,12 @@ from core.models import AssessmentResult
 from .definitions import ExerciseDefinitionRegistry, normalize_side
 
 
+MAX_TARGET_REPETITIONS = 1000
+MAX_RESISTANCE_VALUE = 9_999_999.999
+MAX_RESISTANCE_UNIT_LENGTH = 24
+MAX_RESISTANCE_TYPE_LENGTH = 40
+
+
 def _freeze_snapshot_value(value):
     if isinstance(value, dict):
         return MappingProxyType({key: _freeze_snapshot_value(item) for key, item in value.items()})
@@ -63,8 +69,10 @@ class WorkoutPrescription:
         object.__setattr__(self, "side", normalize_side(self.side))
         if isinstance(self.target_repetitions, bool) or not isinstance(self.target_repetitions, int):
             raise ValueError("target_repetitions must be a positive integer")
-        if self.target_repetitions <= 0:
-            raise ValueError("target_repetitions must be a positive integer")
+        if not 1 <= self.target_repetitions <= MAX_TARGET_REPETITIONS:
+            raise ValueError(
+                f"target_repetitions must be between 1 and {MAX_TARGET_REPETITIONS}"
+            )
         if self.resistance_value is None:
             if self.resistance_unit is not None:
                 raise ValueError("resistance_unit requires resistance_value")
@@ -76,16 +84,29 @@ class WorkoutPrescription:
             or not isinstance(self.resistance_value, (int, float))
             or not math.isfinite(self.resistance_value)
             or self.resistance_value < 0
+            or self.resistance_value > MAX_RESISTANCE_VALUE
         ):
-            raise ValueError("resistance_value must be a non-negative number")
+            raise ValueError(
+                f"resistance_value must be between 0 and {MAX_RESISTANCE_VALUE}"
+            )
         if not isinstance(self.resistance_unit, str) or not self.resistance_unit.strip():
             raise ValueError("resistance_unit is required when resistance is set")
+        normalized_unit = self.resistance_unit.strip()
+        if len(normalized_unit) > MAX_RESISTANCE_UNIT_LENGTH:
+            raise ValueError(
+                f"resistance_unit must be at most {MAX_RESISTANCE_UNIT_LENGTH} characters"
+            )
         object.__setattr__(self, "resistance_value", float(self.resistance_value))
-        object.__setattr__(self, "resistance_unit", self.resistance_unit.strip())
+        object.__setattr__(self, "resistance_unit", normalized_unit)
         if self.resistance_type is not None:
             if not isinstance(self.resistance_type, str) or not self.resistance_type.strip():
                 raise ValueError("resistance_type must be non-empty when provided")
-            object.__setattr__(self, "resistance_type", self.resistance_type.strip())
+            normalized_type = self.resistance_type.strip()
+            if len(normalized_type) > MAX_RESISTANCE_TYPE_LENGTH:
+                raise ValueError(
+                    f"resistance_type must be at most {MAX_RESISTANCE_TYPE_LENGTH} characters"
+                )
+            object.__setattr__(self, "resistance_type", normalized_type)
 
 
 @dataclass(frozen=True)
