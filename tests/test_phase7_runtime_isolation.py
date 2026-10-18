@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ from dashboard.app import (
     runtime_registry,
     video_consumer_guard,
     vision,
+    video_diagnostics_state,
     _generate_frames,
     _expire_idle_runtime_contexts,
     _release_runtime_context,
@@ -458,6 +460,35 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
 
         get_frame.assert_called_once()
         process_pose.assert_not_called()
+
+    def test_frame_generator_terminates_after_repeated_processing_failures(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        frames = _generate_frames(context)
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        with patch.object(vision, "get_frame", return_value=frame), patch.object(
+            context.pose,
+            "process",
+            side_effect=RuntimeError("synthetic processing failure"),
+            create=True,
+        ) as process_pose:
+            terminal_part = next(frames)
+            self.assertIn(b"X-Revaliv-Stream-Error: frame_processing_failed", terminal_part)
+            with self.assertRaises(StopIteration):
+                next(frames)
+
+        self.assertEqual(process_pose.call_count, 3)
+        self.assertEqual(
+            video_diagnostics_state["stream_error"],
+            "frame_processing_failed",
+        )
+        _release_runtime_context(context.runtime_id)
 
     def test_discarding_active_legacy_assessment_marks_runtime_cancelled(self):
         client = app.test_client()
