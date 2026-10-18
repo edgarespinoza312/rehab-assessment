@@ -1,10 +1,26 @@
 import re
 import unittest
 
-from dashboard.config import resolve_security_settings
+from flask import Flask, request
+
+from dashboard.config import Config, resolve_security_settings
 
 
 class ConfigSecurityTests(unittest.TestCase):
+    def test_request_body_limit_rejects_oversized_posts(self):
+        app = Flask(__name__)
+        app.config.from_object(Config)
+
+        @app.route("/submit", methods=["POST"])
+        def submit():
+            return str(len(request.get_data()))
+
+        response = app.test_client().post(
+            "/submit",
+            data=b"x" * (Config.MAX_CONTENT_LENGTH + 1),
+        )
+        self.assertEqual(response.status_code, 413)
+
     def test_development_uses_ephemeral_secret_and_http_compatible_cookies(self):
         secret, secure_cookies = resolve_security_settings({
             "REVALIV_ENV": "development",
