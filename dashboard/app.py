@@ -757,8 +757,12 @@ def view_assessment(assessment_id):
         report=report,
         patient=assessment.patient,
         assessment=assessment,
-        historical=True
-
+        historical=True,
+        can_edit_notes=authorize_patient_access(
+            current_identity(),
+            Capability.VIEW_ASSIGNED_PATIENT,
+            assessment.patient_id,
+        ),
     )
 
 

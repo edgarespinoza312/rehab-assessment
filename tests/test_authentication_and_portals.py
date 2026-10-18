@@ -119,6 +119,35 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/clinician").status_code, 403)
         self.assertEqual(self.client.get("/patients/2").status_code, 403)
 
+    def test_historical_notes_editor_is_only_shown_to_clinicians(self):
+        record = AssessmentRecord(
+            assessment_id=1,
+            patient_id=1,
+            exercise="Left Bicep Curl",
+            repetitions=1,
+            average_score=50.0,
+            best_score=60.0,
+            worst_score=40.0,
+            feedback="[]",
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        self._login("patient@example.test", "PATIENT")
+        patient_view = self.client.get("/assessment/1")
+        self.assertEqual(patient_view.status_code, 200)
+        patient_html = patient_view.get_data(as_text=True)
+        self.assertNotIn("Save Notes", patient_html)
+        self.assertNotIn("Enter additional observations", patient_html)
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("clinician@example.test", "CLINICIAN")
+        clinician_view = self.client.get("/assessment/1")
+        self.assertEqual(clinician_view.status_code, 200)
+        clinician_html = clinician_view.get_data(as_text=True)
+        self.assertIn("Save Notes", clinician_html)
+        self.assertIn("Enter additional observations", clinician_html)
+
     def test_patient_cannot_infer_other_assessment_ids_from_status_codes(self):
         record = AssessmentRecord(
             assessment_id=1,
