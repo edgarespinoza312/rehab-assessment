@@ -181,7 +181,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
     def test_request_recovers_when_signed_session_references_missing_runtime(self):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
-        with patch.object(app, "testing", False):
+        with patch.dict(app.config, {"TESTING": False}):
             self._start_assessment(client, 1)
             with client.session_transaction() as state:
                 old_runtime_id = state[RUNTIME_SESSION_KEY]
