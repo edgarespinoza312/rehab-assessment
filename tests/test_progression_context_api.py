@@ -115,6 +115,12 @@ class ProgressionContextApiTests(unittest.TestCase):
             ).status_code,
             400,
         )
+        self.assertEqual(
+            self.client.get(
+                "/api/patients/1/progression/context?recent_limit=101"
+            ).status_code,
+            400,
+        )
 
 
 if __name__ == "__main__":
