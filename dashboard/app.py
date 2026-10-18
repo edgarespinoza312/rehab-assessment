@@ -1397,9 +1397,18 @@ def patient_progression_context_api(patient_id):
     if side is not None and side not in {"left", "right"}:
         return jsonify({"error": "side must be 'left' or 'right'"}), 400
 
-    recent_limit = request.args.get("recent_limit", default=5, type=int)
-    if recent_limit is None or recent_limit <= 0:
-        return jsonify({"error": "recent_limit must be a positive integer"}), 400
+    raw_recent_limits = request.args.getlist("recent_limit")
+    if not raw_recent_limits:
+        recent_limit = 5
+    elif len(raw_recent_limits) != 1:
+        return jsonify({"error": "recent_limit must be supplied once"}), 400
+    else:
+        try:
+            recent_limit = int(raw_recent_limits[0])
+        except (TypeError, ValueError):
+            return jsonify({"error": "recent_limit must be a positive integer"}), 400
+        if recent_limit <= 0:
+            return jsonify({"error": "recent_limit must be a positive integer"}), 400
 
     try:
         contexts = get_patient_progression_context(
