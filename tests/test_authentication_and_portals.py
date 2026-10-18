@@ -150,6 +150,7 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         selection_html = selection.get_data(as_text=True)
         self.assertIn('name="patient_id"', selection_html)
         self.assertIn('value="1"', selection_html)
+        self.assertNotIn("Patient, Other", selection_html)
         builder = self.client.get("/workout/builder?patient_id=2")
         self.assertEqual(builder.status_code, 200)
         self.assertNotIn("Other Patient", builder.get_data(as_text=True))
@@ -189,6 +190,8 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertIn("No workspace available", fallback.get_data(as_text=True))
         self.assertEqual(self.client.get("/clinician").status_code, 403)
         self.assertEqual(self.client.get("/workout/builder").status_code, 403)
+        self.assertEqual(self.client.get("/selection").status_code, 403)
+        self.assertEqual(self.client.get("/patient").status_code, 403)
         denied = self.client.post("/workout/plans", json={
             "name": "Operator plan",
             "patient_id": 1,
@@ -205,6 +208,8 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self._login("admin@example.test", "ADMIN")
         self.assertEqual(self.client.get("/clinician").status_code, 403)
         self.assertEqual(self.client.get("/workout/builder").status_code, 403)
+        self.assertEqual(self.client.get("/selection").status_code, 403)
+        self.assertEqual(self.client.get("/patient").status_code, 403)
         denied = self.client.post("/workout/plans", json={
             "name": "Admin plan without clinician role",
             "patient_id": 1,
@@ -217,6 +222,9 @@ class AuthenticationAndPortalTests(unittest.TestCase):
     def test_clinician_can_build_and_create_patient_workout_plan(self):
         self._login("clinician@example.test", "CLINICIAN")
         self.assertEqual(self.client.get("/workout/builder?patient_id=1").status_code, 200)
+        selection = self.client.get("/selection?patient_id=1")
+        self.assertEqual(selection.status_code, 200)
+        self.assertIn("Patient, Pat", selection.get_data(as_text=True))
         response = self.client.post("/workout/plans", json={
             "name": "Clinician plan",
             "patient_id": 1,

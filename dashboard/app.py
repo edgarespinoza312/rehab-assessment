@@ -557,10 +557,10 @@ def logout():
 @require_auth
 def patient_home():
     identity = current_identity()
+    if not any(role.value == "PATIENT" for role in identity.roles):
+        return jsonify({"error": "forbidden"}), 403
     if not identity.patient_id:
         return render_template("patient_home.html", user=db.session.get(User, identity.user_id), patient=None)
-    if not identity.roles or not any(role.value == "PATIENT" for role in identity.roles):
-        return jsonify({"error": "forbidden"}), 403
     patient = db.session.get(Patient, identity.patient_id)
     return render_template(
         "patient_home.html",
@@ -791,17 +791,21 @@ def home():
 @require_auth
 def selection():
     identity = current_identity()
+    roles = {role.value for role in identity.roles}
+    patient_role = "PATIENT" in roles
+    clinician_role = "CLINICIAN" in roles
+    if not authorize_patient_access(identity, Capability.CREATE_WORKOUT_PLAN, None):
+        return jsonify({"error": "forbidden"}), 403
 
-    patient_id = request.args.get(
-        "patient_id",
-        type=int
-    )
-    if any(role.value == "PATIENT" for role in identity.roles) and not any(
-        role.value == "CLINICIAN" for role in identity.roles
-    ):
+    patient_id = request.args.get("patient_id", type=int)
+    if patient_role and not clinician_role:
         if identity.patient_id is None:
             return jsonify({"error": "patient profile is not linked"}), 403
         patient_id = identity.patient_id
+    elif patient_id is not None and not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
 
     print("Selection page patient_id =", patient_id)
 
@@ -821,9 +825,7 @@ def selection():
             "description": preset.description,
             "exercises": exercises,
         })
-    if any(role.value == "PATIENT" for role in identity.roles) and not any(
-        role.value == "CLINICIAN" for role in identity.roles
-    ):
+    if patient_role and not clinician_role:
         patients = [db.session.get(Patient, identity.patient_id)]
     else:
         patients = Patient.query.order_by(
