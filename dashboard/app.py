@@ -9,7 +9,7 @@ from flask import (
     url_for,
 )
 from flask_migrate import upgrade
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import date as date_type
 from dataclasses import asdict
 import atexit
@@ -227,10 +227,22 @@ def runtime_context_for_request(*, create: bool = True):
         return None
     runtime_id = flask_session.get(RUNTIME_SESSION_KEY)
     context = runtime_registry.get(runtime_id)
-    if context is not None and context.user_id == identity.user_id:
-        return context
-    if runtime_id is not None:
-        return None
+    if context is not None:
+        if context.user_id != identity.user_id:
+            return None
+        with context.lock:
+            if context.lifecycle is RuntimeLifecycle.EXPIRED:
+                runtime_registry.remove(runtime_id)
+                flask_session.pop(RUNTIME_SESSION_KEY, None)
+                if not create:
+                    return None
+            else:
+                context.touch()
+                return context
+    elif runtime_id is not None:
+        flask_session.pop(RUNTIME_SESSION_KEY, None)
+        if not create:
+            return None
     if not create:
         return None
     context = runtime_registry.create(
@@ -475,6 +487,40 @@ def release_orphaned_runtime():
     if runtime_id is not None:
         _release_runtime_context(runtime_id)
         flask_session.pop(RUNTIME_SESSION_KEY, None)
+    return None
+
+# A runtime is reaped after one hour without request or frame activity.
+RUNTIME_IDLE_TIMEOUT_SECONDS = 60 * 60
+RUNTIME_SWEEP_INTERVAL_SECONDS = 60
+_last_runtime_sweep_monotonic = 0.0
+_runtime_sweep_lock = threading.Lock()
+
+
+def _expire_idle_runtime_contexts(*, now=None, idle_timeout_seconds=RUNTIME_IDLE_TIMEOUT_SECONDS):
+    """Close and remove runtimes that have had no request or frame activity."""
+    current_time = now or datetime.utcnow()
+    cutoff = current_time - timedelta(seconds=idle_timeout_seconds)
+    expired_count = 0
+    for context in runtime_registry.snapshot():
+        with context.lock:
+            if context.updated_at < cutoff:
+                _release_runtime_context(context.runtime_id)
+                expired_count += 1
+    return expired_count
+
+
+@app.before_request
+def reap_idle_runtime_contexts():
+    """Periodically release abandoned contexts without scanning on every request."""
+    global _last_runtime_sweep_monotonic
+    now_monotonic = time.monotonic()
+    if now_monotonic - _last_runtime_sweep_monotonic < RUNTIME_SWEEP_INTERVAL_SECONDS:
+        return None
+    with _runtime_sweep_lock:
+        if now_monotonic - _last_runtime_sweep_monotonic < RUNTIME_SWEEP_INTERVAL_SECONDS:
+            return None
+        _last_runtime_sweep_monotonic = now_monotonic
+    _expire_idle_runtime_contexts()
     return None
 
 # ==========================================================
@@ -2484,6 +2530,7 @@ def _generate_frames(context=None):
                 RuntimeLifecycle.EXPIRED,
             } or not _has_active_runtime_session(context):
                 return
+            context.touch()
             session = context.session
             workout_runtime = context.workout_runtime
             runtime_mode = context.runtime_mode

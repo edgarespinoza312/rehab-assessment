@@ -1,7 +1,14 @@
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from dashboard.app import app, runtime_registry, _generate_frames
+from dashboard.app import (
+    app,
+    runtime_registry,
+    _generate_frames,
+    _expire_idle_runtime_contexts,
+    _release_runtime_context,
+)
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.runtime_context import RuntimeLifecycle
@@ -146,6 +153,51 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIsNone(context.completed_session)
         self.assertIsNone(context.workout_runtime)
 
+
+    def test_idle_runtime_expiry_closes_stale_resources_but_keeps_recent_runtime(self):
+        now = datetime.utcnow()
+        stale = runtime_registry.create(self.a.user_id, patient_id=1)
+        recent = runtime_registry.create(self.b.user_id, patient_id=2)
+        stale.updated_at = now - timedelta(hours=2)
+        recent.updated_at = now
+
+        with (
+            patch.object(stale.pose, "close") as close_stale,
+            patch.object(recent.pose, "close") as close_recent,
+        ):
+            expired_count = _expire_idle_runtime_contexts(
+                now=now,
+                idle_timeout_seconds=60 * 60,
+            )
+
+        self.assertEqual(expired_count, 1)
+        self.assertIsNone(runtime_registry.get(stale.runtime_id))
+        self.assertEqual(stale.lifecycle, RuntimeLifecycle.EXPIRED)
+        close_stale.assert_called_once()
+        self.assertIs(runtime_registry.get(recent.runtime_id), recent)
+        close_recent.assert_not_called()
+        _release_runtime_context(recent.runtime_id)
+
+    def test_request_recovers_when_signed_session_references_missing_runtime(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            old_runtime_id = state[RUNTIME_SESSION_KEY]
+        old_context = runtime_registry.get(old_runtime_id)
+        self.assertIsNotNone(old_context)
+
+        _release_runtime_context(old_runtime_id)
+        missing_runtime_response = client.get("/session")
+        self.assertEqual(missing_runtime_response.status_code, 404)
+        with client.session_transaction() as state:
+            self.assertNotIn(RUNTIME_SESSION_KEY, state)
+
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            new_runtime_id = state[RUNTIME_SESSION_KEY]
+        self.assertNotEqual(new_runtime_id, old_runtime_id)
+        self.assertIsNotNone(runtime_registry.get(new_runtime_id))
 
     def test_finishing_legacy_assessment_marks_runtime_completed(self):
         client = app.test_client()
