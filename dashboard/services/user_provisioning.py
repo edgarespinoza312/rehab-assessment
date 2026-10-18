@@ -99,9 +99,9 @@ def create_patient_account(*, display_name, email, password):
     first_name = parts[0]
     last_name = parts[1] if len(parts) == 2 else "Patient"
     patient = Patient(first_name=first_name[:50], last_name=last_name[:50])
-    db.session.add(patient)
-    db.session.flush()
     try:
+        db.session.add(patient)
+        db.session.flush()
         user = create_user(
             display_name=normalized_display_name,
             email=email,
