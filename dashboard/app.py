@@ -824,23 +824,59 @@ def new_patient():
     if not any(role.value == "CLINICIAN" for role in identity.roles):
         return jsonify({"error": "forbidden"}), 403
 
+    form = request.form if request.method == "POST" else {}
     if request.method == "POST":
         require_csrf()
 
+        first_name = (form.get("first_name") or "").strip()
+        last_name = (form.get("last_name") or "").strip()
+        date_of_birth = (form.get("date_of_birth") or "").strip()
+        sex = (form.get("sex") or "").strip()
+        diagnosis = (form.get("diagnosis") or "").strip()
+        affected_side = (form.get("affected_side") or "").strip()
+        therapist_notes = form.get("therapist_notes") or ""
+
+        error = None
+        if not all((first_name, last_name, date_of_birth, sex, diagnosis, affected_side)):
+            error = "Complete all required fields."
+        elif (
+            len(first_name) > 50
+            or len(last_name) > 50
+            or len(sex) > 20
+            or len(diagnosis) > 150
+            or len(affected_side) > 20
+        ):
+            error = "One or more fields exceeds the allowed length."
+        elif sex not in {"Male", "Female", "Other"}:
+            error = "Select a valid sex option."
+        elif affected_side not in {"Left", "Right", "Bilateral"}:
+            error = "Select a valid affected-side option."
+        elif len(therapist_notes) > 10000:
+            error = "Therapist notes must be 10,000 characters or fewer."
+        else:
+            try:
+                birth_date = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
+            except ValueError:
+                error = "Enter a valid date of birth."
+            else:
+                if birth_date > date_type.today():
+                    error = "Date of birth cannot be in the future."
+
+        if error is not None:
+            return render_template(
+                "new_patient.html",
+                error=error,
+                form=form,
+            ), 400
+
         patient = Patient(
-            first_name=request.form["first_name"],
-            last_name=request.form["last_name"],
-            date_of_birth=datetime.strptime(
-                request.form["date_of_birth"],
-                "%Y-%m-%d"
-            ).date(),
-            sex=request.form["sex"],
-            diagnosis=request.form["diagnosis"],
-            affected_side=request.form["affected_side"],
-            therapist_notes=request.form.get(
-                "therapist_notes",
-                ""
-            ),
+            first_name=first_name,
+            last_name=last_name,
+            date_of_birth=birth_date,
+            sex=sex,
+            diagnosis=diagnosis,
+            affected_side=affected_side,
+            therapist_notes=therapist_notes,
         )
 
         db.session.add(patient)
@@ -851,7 +887,8 @@ def new_patient():
         )
 
     return render_template(
-        "new_patient.html"
+        "new_patient.html",
+        form=form,
     )
 
 @app.route("/")

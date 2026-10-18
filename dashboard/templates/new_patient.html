@@ -53,6 +53,15 @@ body{
     box-shadow:0 10px 30px rgba(0,0,0,.08);
 }
 
+.form-error{
+    margin-bottom:20px;
+    padding:12px 14px;
+    border:1px solid #ef4444;
+    border-radius:10px;
+    background:#fef2f2;
+    color:#991b1b;
+}
+
 .section{
     margin-bottom:30px;
 }
@@ -179,6 +188,10 @@ button:hover{
 
     <div class="card">
 
+        {% if error %}
+        <div class="form-error" role="alert">{{ error }}</div>
+        {% endif %}
+
         <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -190,26 +203,26 @@ button:hover{
 
                     <div class="field">
                         <label>First Name</label>
-                        <input type="text" name="first_name" required>
+                        <input type="text" name="first_name" maxlength="50" value="{{ form.get('first_name', '') }}" required>
                     </div>
 
                     <div class="field">
                         <label>Last Name</label>
-                        <input type="text" name="last_name" required>
+                        <input type="text" name="last_name" maxlength="50" value="{{ form.get('last_name', '') }}" required>
                     </div>
 
                     <div class="field">
                         <label>Date of Birth</label>
-                        <input type="date" name="date_of_birth" required>
+                        <input type="date" name="date_of_birth" value="{{ form.get('date_of_birth', '') }}" required>
                     </div>
 
                     <div class="field">
                         <label>Sex</label>
                         <select name="sex" required>
                             <option value="">Select...</option>
-                            <option>Male</option>
-                            <option>Female</option>
-                            <option>Other</option>
+                            <option value="Male" {% if form.get('sex') == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if form.get('sex') == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Other" {% if form.get('sex') == 'Other' %}selected{% endif %}>Other</option>
                         </select>
                     </div>
 
@@ -228,6 +241,8 @@ button:hover{
                         <input
                             type="text"
                             name="diagnosis"
+                            maxlength="150"
+                            value="{{ form.get('diagnosis', '') }}"
                             placeholder="Example: Left Hemiparesis"
                             required>
                     </div>
@@ -236,17 +251,17 @@ button:hover{
                         <label>Affected Side</label>
                         <select name="affected_side" required>
                             <option value="">Select...</option>
-                            <option>Left</option>
-                            <option>Right</option>
-                            <option>Bilateral</option>
+                            <option value="Left" {% if form.get('affected_side') == 'Left' %}selected{% endif %}>Left</option>
+                            <option value="Right" {% if form.get('affected_side') == 'Right' %}selected{% endif %}>Right</option>
+                            <option value="Bilateral" {% if form.get('affected_side') == 'Bilateral' %}selected{% endif %}>Bilateral</option>
                         </select>
                     </div>
 
                     <div class="field full">
                         <label>Therapist Notes</label>
                         <textarea
-                            name="therapist_notes"
-                            placeholder="Enter any relevant clinical observations..."></textarea>
+                            name="therapist_notes" maxlength="10000"
+                            placeholder="Enter any relevant clinical observations...">{{ form.get('therapist_notes', '') }}</textarea>
                     </div>
 
                 </div>

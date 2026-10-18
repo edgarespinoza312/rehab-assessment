@@ -366,6 +366,57 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         )
         self.assertEqual(unknown_start.status_code, 400)
 
+    def test_new_patient_rejects_invalid_fields_without_creating_records(self):
+        self._login("clinician@example.test", "CLINICIAN")
+        initial_count = Patient.query.count()
+        valid_form = {
+            "first_name": "New",
+            "last_name": "Patient",
+            "date_of_birth": "2000-01-02",
+            "sex": "Other",
+            "diagnosis": "Test diagnosis",
+            "affected_side": "Left",
+            "therapist_notes": "",
+        }
+        invalid_forms = [
+            ("missing required field", {**valid_form, "first_name": ""}),
+            ("invalid date", {**valid_form, "date_of_birth": "not-a-date"}),
+            ("future date", {**valid_form, "date_of_birth": "2999-01-01"}),
+            ("invalid sex", {**valid_form, "sex": "unknown"}),
+            ("invalid affected side", {**valid_form, "affected_side": "center"}),
+            ("overlong name", {**valid_form, "first_name": "N" * 51}),
+            ("overlong diagnosis", {**valid_form, "diagnosis": "D" * 151}),
+            ("overlong notes", {**valid_form, "therapist_notes": "N" * 10001}),
+        ]
+        for case, form in invalid_forms:
+            with self.subTest(case=case):
+                payload = dict(form)
+                payload["csrf_token"] = self._csrf()
+                response = self.client.post("/patients/new", data=payload)
+                self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(Patient.query.count(), initial_count)
+
+    def test_clinician_can_create_patient_with_valid_form(self):
+        self._login("clinician@example.test", "CLINICIAN")
+        response = self.client.post(
+            "/patients/new",
+            data={
+                "csrf_token": self._csrf(),
+                "first_name": "New",
+                "last_name": "Patient",
+                "date_of_birth": "2000-01-02",
+                "sex": "Other",
+                "diagnosis": "Test diagnosis",
+                "affected_side": "Left",
+                "therapist_notes": "Initial note",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Patient.query.count(), 3)
+        patient = Patient.query.filter_by(first_name="New", last_name="Patient").one()
+        self.assertEqual(patient.therapist_notes, "Initial note")
+
     def test_destructive_actions_require_explicit_clinician_delete_capabilities(self):
         record = AssessmentRecord(
             assessment_id=1,
