@@ -15,9 +15,6 @@ from core.workout import (
     WorkoutPrescription,
 )
 from dashboard.database import db
-MAX_WORKOUT_PLAN_NAME_LENGTH = 120
-
-
 from dashboard.models import (
     CompletedWorkoutSession,
     ExerciseIdentity,
@@ -25,6 +22,8 @@ from dashboard.models import (
     WorkoutPlan,
     WorkoutPlanExercise,
 )
+
+MAX_WORKOUT_PLAN_NAME_LENGTH = 120
 
 
 def _ensure_exercise_identities() -> None:
