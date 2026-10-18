@@ -76,7 +76,7 @@ class WorkoutPersistenceTests(unittest.TestCase):
         self.assertIsNone(loaded.exercises[1].resistance_value)
 
     def test_unknown_exercise_id_is_rejected_without_partial_records(self):
-        with self.assertRaisesRegex(ValueError, "unknown exercise identifier"):
+        with self.assertRaisesRegex(ValueError, "unknown exercise definition"):
             create_workout_plan(
                 "Invalid exercise",
                 (WorkoutPrescription("unknown_exercise", "left", 4),),
