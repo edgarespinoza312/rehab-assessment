@@ -58,17 +58,19 @@ This project demonstrates how edge AI and pose estimation can be combined to cre
 
 ```
 rehab-assessment/
-│
-├── app.py                 # Main application
-├── vision.py              # Camera interface
-├── pose.py                # Pose estimation pipeline
-├── assessment.py          # Exercise evaluation logic
-├── utils.py               # Helper functions
+├── core/                  # Vision, perception, biomechanics, exercises, workouts
+├── dashboard/
+│   ├── app.py              # Flask application and routes
+│   ├── config.py           # Session and database configuration
+│   ├── models/             # SQLAlchemy models
+│   ├── services/           # Authentication, authorization, persistence
+│   ├── templates/          # HTML templates
+│   └── static/             # Front-end assets
+├── migrations/             # Database migrations
+├── tests/                  # Automated tests
 ├── requirements.txt
 └── README.md
 ```
-
-*(Directory structure may vary as development continues.)*
 
 ---
 
@@ -111,19 +113,21 @@ pip install -r requirements.txt
 
 ## Running
 
-Start the application with
+From the repository root, start the Flask application with:
 
 ```bash
-python app.py
+python -m flask --app dashboard.app run --host 127.0.0.1 --port 5000
 ```
 
-The application will:
+Then open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-1. Open the connected camera
-2. Detect the user's pose
-3. Estimate body landmarks
-4. Analyze movement quality
-5. Display annotated video in real time
+The web server does not need to open the camera during startup. The camera is initialized when an authorized assessment requests the video stream. If no camera is available, the rest of the web interface can still load; the video-stream request returns a service-unavailable response.
+
+For automated tests, use an isolated SQLite database:
+
+```bash
+REVALIV_DATABASE_URI=sqlite:// python -m pytest -q
+```
 
 ---
 
