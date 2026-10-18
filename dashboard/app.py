@@ -209,6 +209,10 @@ def runtime_context_for_request(*, create: bool = True):
     if compatibility_mode:
         if _compatibility_context is None:
             _compatibility_context = runtime_registry.create(0)
+            # Legacy in-process tests mutate the compatibility globals while
+            # holding assessment_state_lock; share that same re-entrant lock
+            # so finish/save requests cannot snapshot a partial frame update.
+            _compatibility_context.lock = assessment_state_lock
         _compatibility_context.session = session
         _compatibility_context.completed_session = completed_session
         _compatibility_context.workout_runtime = workout_runtime
