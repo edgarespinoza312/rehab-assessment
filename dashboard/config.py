@@ -47,6 +47,23 @@ class Config:
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = _SESSION_COOKIE_SECURE
 
+    REVALIV_ENV = os.environ.get("REVALIV_ENV", "development").strip().lower()
+    REVALIV_PUBLIC_BASE_URL = os.environ.get(
+        "REVALIV_PUBLIC_BASE_URL", ""
+    ).strip().rstrip("/")
+    REVALIV_SMTP_HOST = os.environ.get("REVALIV_SMTP_HOST", "").strip()
+    REVALIV_SMTP_PORT = int(os.environ.get("REVALIV_SMTP_PORT", "587"))
+    REVALIV_SMTP_USERNAME = os.environ.get("REVALIV_SMTP_USERNAME", "")
+    REVALIV_SMTP_PASSWORD = os.environ.get("REVALIV_SMTP_PASSWORD", "")
+    REVALIV_SMTP_FROM = os.environ.get("REVALIV_SMTP_FROM", "").strip()
+    REVALIV_SMTP_STARTTLS = os.environ.get(
+        "REVALIV_SMTP_STARTTLS", "1"
+    ).strip().lower() in {"1", "true", "yes"}
+    REVALIV_SMTP_USE_SSL = os.environ.get(
+        "REVALIV_SMTP_USE_SSL", "0"
+    ).strip().lower() in {"1", "true", "yes"}
+    PASSWORD_RESET_TOKEN_MAX_AGE = 60 * 60
+
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "REVALIV_DATABASE_URI",
         f"sqlite:///{os.path.join(BASE_DIR, 'neuromotion.db')}",

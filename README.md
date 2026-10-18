@@ -123,6 +123,21 @@ Then open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
 The web server does not need to open the camera during startup. The camera is initialized when an authorized assessment requests the video stream. If no camera is available, the rest of the web interface can still load; the video-stream request returns a service-unavailable response.
 
+### Password reset email configuration
+
+The forgot-password flow uses a one-hour, single-use reset token. When developing locally without SMTP settings, the reset URL is written to the Flask terminal; this fallback is disabled in production.
+
+For deployment, set these environment variables before starting Flask:
+
+- `REVALIV_ENV=production`
+- `REVALIV_PUBLIC_BASE_URL=https://your-public-host.example` (the HTTPS origin serving Revaliv)
+- `REVALIV_SMTP_HOST` and `REVALIV_SMTP_PORT` (usually port `587` with STARTTLS)
+- `REVALIV_SMTP_USERNAME` and `REVALIV_SMTP_PASSWORD` if your mail provider requires authentication
+- `REVALIV_SMTP_FROM` (the verified sender address)
+- `REVALIV_SMTP_STARTTLS=1` for STARTTLS, or `REVALIV_SMTP_USE_SSL=1` for implicit TLS (commonly port `465`)
+
+Production must use a stable `REVALIV_SECRET_KEY` as already required by the application. Do not put SMTP credentials in source control.
+
 For automated tests, use an isolated SQLite database:
 
 ```bash

@@ -41,6 +41,12 @@ from dashboard.services.user_provisioning import (
     create_user,
     disable_user,
 )
+from dashboard.services.password_reset import (
+    build_password_reset_url,
+    generate_password_reset_token,
+    send_password_reset_email,
+    verify_password_reset_token,
+)
 from dashboard.runtime_context import RuntimeRegistry
 from dashboard.runtime_context import RuntimeLifecycle
 from dashboard.services.authentication import RUNTIME_SESSION_KEY
@@ -637,6 +643,81 @@ def login():
     if current_identity().is_authenticated:
         return redirect(role_landing(current_identity()))
     return _render_login()
+
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """Request a password reset without revealing whether an account exists."""
+    if request.method == "GET":
+        return render_template("forgot_password.html", submitted=False)
+
+    require_csrf()
+    email = (request.form.get("email") or "").strip().lower()
+    if email and len(email) <= 255:
+        user = User.query.filter_by(email=email).first()
+        if (
+            user is not None
+            and user.status == "ACTIVE"
+            and user.email
+            and user.password_hash
+        ):
+            try:
+                token = generate_password_reset_token(user)
+                reset_url = build_password_reset_url(token)
+                send_password_reset_email(user.email, reset_url)
+            except Exception:
+                # Keep the response identical for valid and unknown addresses.
+                # Delivery/configuration errors belong in server logs, not the UI.
+                logger.exception("Unable to deliver a password reset email")
+
+    return render_template("forgot_password.html", submitted=True)
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """Validate a short-lived token and set a new password exactly once."""
+    user = verify_password_reset_token(token)
+    if user is None:
+        return render_template(
+            "reset_password.html",
+            invalid=True,
+            error=None,
+        ), 400
+
+    if request.method == "GET":
+        return render_template(
+            "reset_password.html",
+            invalid=False,
+            error=None,
+        )
+
+    require_csrf()
+    password = request.form.get("password") or ""
+    confirmation = request.form.get("confirm_password") or ""
+    if password != confirmation:
+        return render_template(
+            "reset_password.html",
+            invalid=False,
+            error="Passwords do not match.",
+        ), 400
+
+    try:
+        user.password_hash = hash_password(password)
+        db.session.commit()
+    except ValueError as error:
+        db.session.rollback()
+        return render_template(
+            "reset_password.html",
+            invalid=False,
+            error=str(error),
+        ), 400
+    except Exception:
+        db.session.rollback()
+        logger.exception("Unable to save a password reset")
+        abort(500)
+
+    return redirect(url_for("login", password_reset="success"))
 
 
 @app.route("/register", methods=["GET", "POST"])

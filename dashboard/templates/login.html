@@ -24,6 +24,10 @@
             <input id="password" name="password" type="password" required autocomplete="current-password">
             <button class="auth-submit" type="submit">Sign in</button>
         </form>
+        {% if request.args.get('password_reset') == 'success' %}
+        <p class="auth-description" role="status">Your password has been reset. Sign in with your new password.</p>
+        {% endif %}
+        <p class="auth-footer"><a href="{{ url_for('forgot_password') }}">Forgot your password?</a></p>
         <p class="auth-footer">New to Revaliv? <a href="{{ url_for('register') }}">Create a patient account</a></p>
         <div class="auth-divider" aria-hidden="true"><span>or</span></div>
         <p class="auth-clinician-access">
