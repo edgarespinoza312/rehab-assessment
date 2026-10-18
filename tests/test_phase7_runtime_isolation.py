@@ -304,7 +304,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
 
         frames = _generate_frames(context)
         with (
-            patch("dashboard.vision.get_frame", side_effect=finish_during_capture) as get_frame,
+            patch.object(vision, "get_frame", side_effect=finish_during_capture) as get_frame,
             patch.object(context.pose, "process") as process_pose,
         ):
             with self.assertRaises(StopIteration):
