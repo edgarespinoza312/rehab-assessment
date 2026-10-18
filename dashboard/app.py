@@ -1,4 +1,5 @@
 from flask import (
+    abort,
     Flask,
     Response,
     jsonify,
@@ -693,7 +694,7 @@ def update_assessment_notes(assessment_id):
         assessment.patient_id,
         Capability.VIEW_ASSIGNED_PATIENT,
     ):
-        return jsonify({"error": "forbidden"}), 403
+        abort(404)
 
     assessment.notes = request.form["notes"]
 
@@ -718,7 +719,7 @@ def view_assessment(assessment_id):
     if not _current_user_can_access_patient(
         assessment.patient_id,
     ):
-        return jsonify({"error": "forbidden"}), 403
+        abort(404)
 
     report = {
 

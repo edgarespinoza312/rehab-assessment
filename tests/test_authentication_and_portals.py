@@ -2,7 +2,7 @@ import unittest
 
 from dashboard.app import app
 from dashboard.database import db
-from dashboard.models import Patient, Role, User
+from dashboard.models import AssessmentRecord, Patient, Role, User
 from dashboard.services.authentication import hash_password
 
 
@@ -118,6 +118,35 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         })
         self.assertEqual(self.client.get("/clinician").status_code, 403)
         self.assertEqual(self.client.get("/patients/2").status_code, 403)
+
+    def test_patient_cannot_infer_other_assessment_ids_from_status_codes(self):
+        record = AssessmentRecord(
+            assessment_id=1,
+            patient_id=2,
+            exercise="Left Bicep Curl",
+            repetitions=1,
+            average_score=50.0,
+            best_score=60.0,
+            worst_score=40.0,
+            feedback="[]",
+        )
+        db.session.add(record)
+        db.session.commit()
+        self._login("patient@example.test", "PATIENT")
+
+        existing = self.client.get("/assessment/1")
+        missing = self.client.get("/assessment/999")
+        self.assertEqual(existing.status_code, 404)
+        self.assertEqual(missing.status_code, 404)
+
+        notes_token = self._csrf()
+        update = self.client.post(
+            "/assessment/1/notes",
+            data={"csrf_token": notes_token, "notes": "Unauthorized"},
+        )
+        self.assertEqual(update.status_code, 404)
+        db.session.refresh(record)
+        self.assertIsNone(record.notes)
 
     def test_anonymous_legacy_routes_and_apis_are_denied(self):
         self.assertEqual(self.client.get("/selection").status_code, 302)
