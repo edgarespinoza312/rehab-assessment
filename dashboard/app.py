@@ -9,7 +9,7 @@ from flask import (
     url_for,
 )
 from flask_migrate import upgrade
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from datetime import date as date_type
 from dataclasses import asdict
 import atexit
@@ -1318,7 +1318,12 @@ def _parse_progression_date(value: str | None, parameter: str):
     try:
         if len(value) == 10:
             return date_type.fromisoformat(value)
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is not None:
+            # Persisted timestamps are naive UTC; normalize offset-aware input
+            # to the same comparison/query convention.
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
     except ValueError:
         raise ValueError(
             f"{parameter} must be an ISO date or datetime"
