@@ -386,8 +386,12 @@
         for (const [position, card] of cards.entries()) {
             const rawRepetitions = card.querySelector(".builder-repetitions").value;
             const targetRepetitions = Number(rawRepetitions);
-            if (!Number.isInteger(targetRepetitions) || targetRepetitions < 1) {
-                message.textContent = "Every exercise needs a positive whole-number rep target.";
+            if (
+                !Number.isInteger(targetRepetitions)
+                || targetRepetitions < 1
+                || targetRepetitions > 1000
+            ) {
+                message.textContent = "Every exercise needs a whole-number rep target between 1 and 1000.";
                 return;
             }
             const rawResistance = card.querySelector(".builder-resistance").value.trim();
@@ -395,9 +399,14 @@
             const resistanceUnit = card.querySelector(".builder-resistance-unit").value.trim();
             if (
                 resistanceValue !== null
-                && (!Number.isFinite(resistanceValue) || resistanceValue < 0 || !resistanceUnit)
+                && (
+                    !Number.isFinite(resistanceValue)
+                    || resistanceValue < 0
+                    || resistanceValue > 9999999.999
+                    || !resistanceUnit
+                )
             ) {
-                message.textContent = "Resistance requires a non-negative value and a unit.";
+                message.textContent = "Resistance requires a value between 0 and 9999999.999 and a unit.";
                 return;
             }
             const resistanceType = card.querySelector(".builder-resistance-type").value.trim();
