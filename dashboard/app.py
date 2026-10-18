@@ -2570,10 +2570,18 @@ def _release_video_consumer(lease):
         _consumer_released()
 
 
-def _terminal_camera_error_part(message):
+MAX_CONSECUTIVE_FRAME_PROCESSING_FAILURES = 3
+FRAME_PROCESSING_RETRY_DELAY_SECONDS = 0.1
+
+
+def _terminal_camera_error_part(
+    message,
+    *,
+    error_code="camera_capture_failed",
+):
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     cv2.putText(
-        frame, "Camera stream stopped", (35, 220), cv2.FONT_HERSHEY_SIMPLEX,
+        frame, "Video stream stopped", (35, 220), cv2.FONT_HERSHEY_SIMPLEX,
         0.9, (255, 255, 255), 2, cv2.LINE_AA,
     )
     cv2.putText(
@@ -2584,14 +2592,15 @@ def _terminal_camera_error_part(message):
     if not success:
         message_bytes = message.encode("utf-8", "replace")
         return (
-            b"--frame\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
-            + b"Camera stream stopped: " + message_bytes + b"\r\n"
+            b"--frame\r\nContent-Type: text/plain; charset=utf-8\r\n"
+            + f"X-Revaliv-Stream-Error: {error_code}\r\n\r\n".encode("ascii")
+            + b"Video stream stopped: " + message_bytes + b"\r\n"
         )
     body = encoded.tobytes()
     return (
         b"--frame\r\nContent-Type: image/jpeg\r\n"
         + f"Content-Length: {len(body)}\r\n".encode("ascii")
-        + b"X-Revaliv-Stream-Error: camera_capture_failed\r\n\r\n"
+        + f"X-Revaliv-Stream-Error: {error_code}\r\n\r\n".encode("ascii")
         + body + b"\r\n"
     )
 
@@ -2629,6 +2638,7 @@ def _generate_frames(context=None):
     runtime_mode = context.runtime_mode
 
     camera_failure_policy = CameraFailurePolicy()
+    consecutive_processing_failures = 0
     while True:
         with context.lock:
             if context.lifecycle in {
@@ -2677,10 +2687,28 @@ def _generate_frames(context=None):
             finally:
                 performance.stop_timer("camera_capture", stage_started)
 
-            camera_failure_policy.record_success()
             if frame is None:
+                performance.increment("capture_failures")
+                terminal = camera_failure_policy.record_failure()
+                logger.warning(
+                    "Video camera returned an empty frame (%s/%s)",
+                    camera_failure_policy.consecutive_failures,
+                    camera_failure_policy.max_consecutive_failures,
+                )
+                if terminal:
+                    message = "Camera returned empty frames repeatedly"
+                    with video_diagnostics_lock:
+                        video_diagnostics_state["stream_error"] = message
+                    try:
+                        vision.stop()
+                    except Exception:
+                        logger.exception("Failed to release camera after empty-frame failure")
+                    yield _terminal_camera_error_part(message)
+                    return
+                time.sleep(camera_failure_policy.retry_delay_seconds)
                 continue
 
+            camera_failure_policy.record_success()
             frame_captured = True
             # This is monotonic time when the camera read returns.
             capture_monotonic_ns = time.monotonic_ns()
@@ -2897,8 +2925,20 @@ def _generate_frames(context=None):
             if not success:
                 performance.increment("dropped_frames")
                 performance.increment("jpeg_encode_failures")
+                consecutive_processing_failures += 1
+                if consecutive_processing_failures >= MAX_CONSECUTIVE_FRAME_PROCESSING_FAILURES:
+                    message = "JPEG encoding failed repeatedly"
+                    with video_diagnostics_lock:
+                        video_diagnostics_state["stream_error"] = "frame_encoding_failed"
+                    yield _terminal_camera_error_part(
+                        message,
+                        error_code="frame_encoding_failed",
+                    )
+                    return
+                time.sleep(FRAME_PROCESSING_RETRY_DELAY_SECONDS)
                 continue
 
+            consecutive_processing_failures = 0
             generated_monotonic_ns = time.monotonic_ns()
             processing_age_ms = max(
                 0.0,
@@ -2962,13 +3002,24 @@ def _generate_frames(context=None):
         # Stream Error Recovery
         # ------------------------------------------------------
 
-        except Exception:
+        except Exception as error:
 
             if frame_captured:
                 performance.increment("dropped_frames")
                 performance.increment("processing_errors")
             logger.exception("Video stream frame processing failed")
+            consecutive_processing_failures += 1
+            if consecutive_processing_failures >= MAX_CONSECUTIVE_FRAME_PROCESSING_FAILURES:
+                message = f"Frame processing failed repeatedly: {error}"
+                with video_diagnostics_lock:
+                    video_diagnostics_state["stream_error"] = "frame_processing_failed"
+                yield _terminal_camera_error_part(
+                    message,
+                    error_code="frame_processing_failed",
+                )
+                return
 
+            time.sleep(FRAME_PROCESSING_RETRY_DELAY_SECONDS)
             continue
 
 @app.route("/discard", methods=["POST"])
