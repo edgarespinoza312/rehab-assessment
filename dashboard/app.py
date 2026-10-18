@@ -326,13 +326,12 @@ def log_poll_request(endpoint):
     return decorate
 
 
-# Start the webcam
-vision.start()
+# The camera is initialized only when an authorized stream is requested.
+video_camera_start_lock = threading.Lock()
 
 
 # ==========================================================
 # Global Application State
-# ==========================================================
 
 class RuntimeMode(str, Enum):
     LEGACY_ASSESSMENT = "legacy_assessment"
@@ -2096,6 +2095,19 @@ def video_feed():
     with video_diagnostics_lock:
         video_diagnostics_state["active_consumers"] = 1
         video_diagnostics_state["stream_error"] = None
+    try:
+        with video_camera_start_lock:
+            if vision.camera is None:
+                vision.start()
+    except Exception:
+        logger.exception("Unable to initialize camera for video stream")
+        with video_diagnostics_lock:
+            video_diagnostics_state["stream_error"] = "camera_unavailable"
+        _release_video_consumer(lease)
+        response = jsonify({"error": "camera unavailable"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 503
+
     try:
         response = Response(
             generate_frames(lease, context),
