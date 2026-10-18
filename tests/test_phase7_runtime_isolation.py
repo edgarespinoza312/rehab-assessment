@@ -48,7 +48,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         db.create_all()
         self.context.pop()
 
-    def _login(self, client, email, password):
+    def _login(self, client, email, password, role="PATIENT"):
         client.get("/login")
         with client.session_transaction() as state:
             token = state["revaliv_csrf_token"]
@@ -56,7 +56,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
             "csrf_token": token,
             "email": email,
             "password": password,
-            "role": "PATIENT",
+            "role": role,
         })
         self.assertEqual(response.status_code, 302)
 
@@ -207,6 +207,41 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
             state_b[RUNTIME_SESSION_KEY] = runtime_a
         response = client_b.get("/session")
         self.assertEqual(response.status_code, 404)
+
+    def test_admin_disabling_user_immediately_releases_active_runtime(self):
+        admin_user = create_user(
+            display_name="Admin",
+            email="admin@example.test",
+            password="password-admin",
+            role="ADMIN",
+        )
+        patient_client = app.test_client()
+        self._login(patient_client, "a@example.test", "password-a")
+        self._start_assessment(patient_client, 1)
+        with patient_client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        admin_client = app.test_client()
+        self._login(
+            admin_client,
+            "admin@example.test",
+            "password-admin",
+            role="ADMIN",
+        )
+        with patch.object(context.pose, "close") as close_pose:
+            response = admin_client.post(
+                f"/admin/accounts/{admin_user.user_id if admin_user else self.a.user_id}/disable",
+                data={"csrf_token": self._csrf_for(admin_client)},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(close_pose.call_count, 1)
+        self.assertIsNone(runtime_registry.get(runtime_id))
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.EXPIRED)
+        self.assertIsNone(context.session)
+        self.assertIsNone(context.completed_session)
 
     def test_disabled_user_cannot_continue_runtime(self):
         client = app.test_client()
