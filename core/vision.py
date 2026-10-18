@@ -33,32 +33,44 @@ class VisionEngine:
         self.camera = None
 
     def start(self):
-        """Initializes the webcam."""
+        """Initialize the webcam and release a partial handle on any failure."""
 
-        # CHANGED: force the V4L2 backend
-        self.camera = cv2.VideoCapture(
-            self.camera_index,
-            cv2.CAP_V4L2,
-        )
+        if self.camera is not None:
+            previous_camera, self.camera = self.camera, None
+            try:
+                previous_camera.release()
+            except Exception:
+                logger.exception("Failed to release the previous camera handle")
 
-        # CHANGED: request a 1-frame buffer
-        self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        camera = None
+        try:
+            # Force the V4L2 backend and request a one-frame buffer.
+            camera = cv2.VideoCapture(
+                self.camera_index,
+                cv2.CAP_V4L2,
+            )
+            self.camera = camera
+            camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            camera.set(cv2.CAP_PROP_FPS, 30)
 
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        self.camera.set(cv2.CAP_PROP_FPS, 30)
+            logger.debug(
+                "Camera index %s, buffer size %s",
+                self.camera_index,
+                camera.get(cv2.CAP_PROP_BUFFERSIZE),
+            )
 
-        logger.debug(
-            "Camera index %s, buffer size %s",
-            self.camera_index,
-            self.camera.get(cv2.CAP_PROP_BUFFERSIZE),
-        )
-
-        if not self.camera.isOpened():
-            camera, self.camera = self.camera, None
+            if not camera.isOpened():
+                raise RuntimeError("Unable to open webcam.")
+        except Exception:
+            self.camera = None
             if camera is not None:
-                camera.release()
-            raise RuntimeError("Unable to open webcam.")
+                try:
+                    camera.release()
+                except Exception:
+                    logger.exception("Failed to release camera after startup failure")
+            raise
 
     def get_frame(self):
         """
