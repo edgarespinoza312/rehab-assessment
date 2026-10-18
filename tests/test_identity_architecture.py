@@ -93,6 +93,7 @@ class IdentityArchitectureTests(unittest.TestCase):
             Capability.VIEW_OWN_PATIENT_DATA,
             patient_id=7,
         ))
+        self.assertTrue(can(patient, Capability.ACCESS_ASSESSMENT_SETUP))
         self.assertFalse(can(
             patient,
             Capability.VIEW_OWN_PATIENT_DATA,
@@ -107,6 +108,7 @@ class IdentityArchitectureTests(unittest.TestCase):
             Capability.REVIEW_ADVISORY,
             patient_id=8,
         ))
+        self.assertTrue(can(clinician, Capability.ACCESS_ASSESSMENT_SETUP))
         operator = trusted_development_identity(
             3,
             roles={ApplicationRole.OPERATOR},
@@ -116,6 +118,7 @@ class IdentityArchitectureTests(unittest.TestCase):
             Capability.REVIEW_ADVISORY,
             patient_id=8,
         ))
+        self.assertFalse(can(operator, Capability.ACCESS_ASSESSMENT_SETUP))
         disabled = IdentityContext(
             user_id=4,
             roles=frozenset({ApplicationRole.CLINICIAN}),

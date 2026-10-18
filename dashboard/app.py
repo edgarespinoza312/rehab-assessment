@@ -794,7 +794,7 @@ def selection():
     roles = {role.value for role in identity.roles}
     patient_role = "PATIENT" in roles
     clinician_role = "CLINICIAN" in roles
-    if not authorize_patient_access(identity, Capability.CREATE_WORKOUT_PLAN, None):
+    if not authorize_patient_access(identity, Capability.ACCESS_ASSESSMENT_SETUP, None):
         return jsonify({"error": "forbidden"}), 403
 
     patient_id = request.args.get("patient_id", type=int)

@@ -33,6 +33,7 @@ class Capability(str, Enum):
     REVIEW_ADVISORY = "REVIEW_ADVISORY"
     MANAGE_ACCOUNTS = "MANAGE_ACCOUNTS"
     CREATE_WORKOUT_PLAN = "CREATE_WORKOUT_PLAN"
+    ACCESS_ASSESSMENT_SETUP = "ACCESS_ASSESSMENT_SETUP"
 
 
 @dataclass(frozen=True)
@@ -108,7 +109,10 @@ class AuthorizationService:
         patient_role = ApplicationRole.PATIENT in identity.roles
         clinician_role = ApplicationRole.CLINICIAN in identity.roles
 
-        if capability == Capability.CREATE_WORKOUT_PLAN:
+        if capability in {
+            Capability.CREATE_WORKOUT_PLAN,
+            Capability.ACCESS_ASSESSMENT_SETUP,
+        }:
             return patient_role or clinician_role
 
         if capability in {
