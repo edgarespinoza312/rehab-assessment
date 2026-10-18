@@ -483,6 +483,21 @@ def _release_runtime_context(runtime_id: str | None) -> None:
         runtime_registry.remove(runtime_id)
 
 
+def _release_user_runtime_contexts(user_id: int) -> None:
+    """Immediately stop active assessment/workout streams for a disabled user."""
+    for context in runtime_registry.snapshot():
+        if context.user_id != user_id:
+            continue
+        try:
+            _release_runtime_context(context.runtime_id)
+        except Exception:
+            logger.exception(
+                "Failed to release runtime %s after user %s was disabled",
+                context.runtime_id,
+                user_id,
+            )
+
+
 @app.before_request
 def release_orphaned_runtime():
     """Release runtime state when its cookie no longer identifies an active user."""
@@ -664,6 +679,7 @@ def admin_disable_account(user_id):
         disable_user(user_id)
     except ValueError as error:
         return jsonify({"error": str(error)}), 404
+    _release_user_runtime_contexts(user_id)
     return redirect(url_for("admin_accounts"))
 
 
