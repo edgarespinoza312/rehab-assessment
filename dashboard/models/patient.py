@@ -61,6 +61,26 @@ class Patient(db.Model):
         cascade="all, delete-orphan"
     )
 
+    workout_plans = db.relationship(
+        "WorkoutPlan",
+        back_populates="patient",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    workout_sessions = db.relationship(
+        "CompletedWorkoutSession",
+        back_populates="patient",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    user = db.relationship(
+        "User",
+        back_populates="patient",
+        uselist=False,
+    )
+
     def __repr__(self):
         return (
             f"<Patient {self.first_name} "

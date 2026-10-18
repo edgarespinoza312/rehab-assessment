@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Patient Home | Revaliv{% endblock %}
+{% block content %}
+<section class="card">
+    <h1>Welcome, {{ user.display_name }}</h1>
+    {% if patient %}
+    <p>Continue your rehabilitation assessment and review your own history.</p>
+    <nav class="patient-actions" aria-label="Patient actions">
+        <a class="patient-action patient-action-primary" href="{{ url_for('patient_selection') }}">
+            <strong>Start Exercise</strong>
+            <span>Begin an assessment or workout</span>
+        </a>
+        <a class="patient-action" href="{{ url_for('patient_results') }}">
+            <strong>My Results</strong>
+            <span>Review completed exercise results</span>
+        </a>
+        <a class="patient-action" href="{{ url_for('patient_progress') }}">
+            <strong>My Progress</strong>
+            <span>Explore your rehabilitation history</span>
+        </a>
+    </nav>
+    {% else %}
+    <p role="alert">Your account is not linked to a patient profile yet.</p>
+    {% endif %}
+    <form class="patient-logout" method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Log out</button>
+    </form>
+</section>
+{% endblock %}

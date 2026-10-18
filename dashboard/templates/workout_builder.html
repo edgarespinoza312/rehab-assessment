@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Workout Builder | Revaliv{% endblock %}
+
+{% block content %}
+<div class="selection-container workout-builder">
+    <header class="page-header">
+        <p class="workout-mode-label">Workout Mode</p>
+        <h1>Workout Builder</h1>
+        <p class="panel-subtitle">
+            Arrange exercises from the supported registry and save an ordered prescription.
+        </p>
+    </header>
+
+    <section class="card workout-builder-card" aria-labelledby="builder-plan-title">
+        <label class="builder-field" for="workout-plan-name">
+            Workout name
+            <input id="workout-plan-name" type="text" maxlength="120" required>
+        </label>
+        <label class="builder-field" for="workout-plan-description">
+            Description <span class="builder-optional">(optional)</span>
+            <textarea id="workout-plan-description" rows="2"></textarea>
+        </label>
+        <label class="builder-field" for="workout-plan-patient">
+            Save for patient <span class="builder-optional">(leave unselected for a shared workout)</span>
+            <select id="workout-plan-patient">
+                <option value="">Shared workout</option>
+                {% for patient in patients %}
+                <option value="{{ patient.patient_id }}"
+                        {% if patient.patient_id == patient_id %}selected{% endif %}>
+                    {{ patient.last_name }}, {{ patient.first_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+    </section>
+
+    <section class="card workout-builder-card" aria-labelledby="builder-available-title">
+        <div class="workout-builder-add">
+            <label class="builder-field" for="builder-exercise-choice">
+                Available exercises
+                <select id="builder-exercise-choice">
+                    {% for item in exercises %}
+                    <option value="{{ item.id }}">{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button id="builder-add-exercise" class="begin-button" type="button">
+                Add Exercise
+            </button>
+        </div>
+    </section>
+
+    <section class="card workout-builder-card" aria-labelledby="builder-plan-title">
+        <h2 id="builder-plan-title">Workout order</h2>
+        <p class="panel-subtitle">Drag cards to reorder them, or use the move buttons.</p>
+        <ol id="builder-exercise-list"
+            class="builder-exercise-list"
+            aria-label="Ordered workout exercises"></ol>
+        <p id="builder-empty-message" class="builder-empty">
+            Add an exercise to begin your workout.
+        </p>
+    </section>
+    <p id="builder-history-help" class="sr-only">
+        Recent history is descriptive only and does not change workout prescriptions.
+    </p>
+
+    <output id="builder-message"
+            class="workout-action-message"
+            role="status"
+            aria-live="polite"></output>
+    <div class="workout-builder-actions">
+        <button id="builder-save-workout" class="begin-button" type="button">
+            Save Workout
+        </button>
+        <a class="secondary-button"
+           href="{{ url_for('selection', patient_id=patient_id) }}">
+            Back to Setup
+        </a>
+    </div>
+</div>
+<script id="builder-exercise-data" type="application/json">{{ exercises|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/workout_builder.js') }}"></script>
+{% endblock %}

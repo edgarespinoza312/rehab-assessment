@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Account management | Revaliv{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h1>Account management</h1>
+    <p>Create controlled application accounts and review account status.</p>
+</section>
+{% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+<section class="card account-management-grid">
+    <div>
+        <h2>Create account</h2>
+        <form class="auth-form" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="display_name">Display name</label>
+            <input id="display_name" name="display_name" type="text" required>
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" required>
+            <label for="password">Temporary password</label>
+            <input id="password" name="password" type="password" required minlength="8">
+            <label for="role">Account role</label>
+            <select id="role" name="role" required>
+                {% for role in roles %}<option value="{{ role }}">{{ role|title }}</option>{% endfor %}
+            </select>
+            <label for="patient_id">Link existing patient <span class="field-hint">(optional)</span></label>
+            <select id="patient_id" name="patient_id">
+                <option value="0">No patient link</option>
+                {% for patient in patients %}
+                {% if not patient.user %}
+                <option value="{{ patient.patient_id }}">{{ patient.first_name }} {{ patient.last_name }}</option>
+                {% endif %}
+                {% endfor %}
+            </select>
+            <button class="auth-submit" type="submit">Create account</button>
+        </form>
+    </div>
+    <div>
+        <h2>Accounts</h2>
+        <div class="account-list">
+            {% for user in users %}
+            <article class="account-row">
+                <div>
+                    <strong>{{ user.display_name }}</strong>
+                    <span>{{ user.email }}</span>
+                    <span>{{ user.roles|map(attribute='name')|join(', ') }} · {{ user.status }}</span>
+                </div>
+                {% if user.status == "ACTIVE" %}
+                <form method="post" action="{{ url_for('admin_disable_account', user_id=user.user_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="secondary-button" type="submit">Disable</button>
+                </form>
+                {% endif %}
+            </article>
+            {% else %}
+            <p>No accounts have been provisioned.</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

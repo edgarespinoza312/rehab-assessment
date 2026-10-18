@@ -4,298 +4,229 @@
 Assessment Session
 {% endblock %}
 
+{% block body_class %}
+assessment-workspace-body
+{% endblock %}
+
 {% block content %}
 
-<div class="session-container">
+<div class="session-container"
+     data-workout-mode="{{ 'true' if workout_mode else 'false' }}">
 
-    <!-- ===================================================== -->
-    <!-- Session Header -->
-    <!-- ===================================================== -->
-
-    <section class="card session-status">
-
-        <div class="status-left">
-
-            <h1>Assessment Session</h1>
-
-            <p class="panel-subtitle">
-
-                Live analysis of the current rehabilitation exercise.
-
+    <section class="assessment-context" aria-label="Assessment context">
+        <div>
+            <p class="workspace-eyebrow">
+                {% if workout_mode %}Workout Session{% else %}Legacy Assessment{% endif %}
             </p>
-
-            <p>
-
-                Exercise:
-                <strong id="exercise-name">
-
-                    Left Bicep Curl
-
-                </strong>
-
-            </p>
-
+            <h1 id="exercise-name">{{ exercise_name }}</h1>
         </div>
-
-        <div class="status-right">
-
-            <div class="status-item">
-
-                <span class="status-label">
-
-                    Tracking
-
-                </span>
-
-                <span
-                    id="tracking-status"
-                    class="status-badge status-warning"
-                >
-
-                    Inactive
-
-                </span>
-
-            </div>
-
-            <div class="status-item">
-
-                <span class="status-label">
-
-                    Repetitions
-
-                </span>
-
-                <strong id="rep-count">
-
-                    0
-
-                </strong>
-
-            </div>
-
+        <div class="tracking-indicator">
+            <span class="workspace-label">Tracking status</span>
+            <span id="tracking-status" class="status-badge status-warning">Inactive</span>
         </div>
-
     </section>
 
-    <!-- ===================================================== -->
-    <!-- Main Session Layout -->
-    <!-- ===================================================== -->
-
-    <section class="session-grid">
-
-        <!-- ================================================ -->
-        <!-- Live Camera -->
-        <!-- ================================================ -->
-
-        <section class="card camera-panel">
-
-            <div class="panel-header">
-
-                <h2>Live Camera Feed</h2>
-
-                <p class="panel-subtitle">
-
-                    Real-time pose estimation and biomechanical analysis.
-
-                </p>
-
+    <section id="workout-hud"
+             class="workout-hud"
+             aria-labelledby="workout-hud-title"
+             {% if not workout_mode %}hidden{% endif %}>
+        <div class="workout-hud-heading">
+            <div>
+                <p class="workout-mode-label">Workout</p>
+                <h2 id="workout-hud-title">Current exercise</h2>
             </div>
+            <span id="workout-session-state" class="workout-state-badge">Loading</span>
+        </div>
+        <div class="workout-hud-current">
+            <div>
+                <h3 id="workout-current-name">Loading workout…</h3>
+                <p id="workout-exercise-position" class="workout-exercise-position"></p>
+            </div>
+            <strong id="workout-rep-progress" class="workout-rep-progress">0 / 0</strong>
+        </div>
+        <div class="workout-hud-meta">
+            <span>Phase <strong id="workout-exercise-phase">—</strong></span>
+            <span id="workout-calibration-message">Waiting for workout state.</span>
+        </div>
+        <div id="workout-calibration-progress"
+             class="workout-calibration-progress"
+             role="progressbar"
+             aria-label="Calibration progress"
+             aria-valuemin="0"
+             aria-valuemax="100"
+             aria-valuenow="0"
+             hidden>
+            <span id="workout-calibration-progress-fill"></span>
+        </div>
+        <div id="workout-transition"
+             class="workout-transition"
+             role="status"
+             aria-live="polite"
+             hidden>
+            <strong id="workout-transition-title"></strong>
+            <span id="workout-transition-next"></span>
+        </div>
+        <div id="workout-completion"
+             class="workout-completion"
+             role="status"
+             hidden>
+            <strong>Workout Complete</strong>
+            <ol id="workout-completion-list"></ol>
+            <button id="workout-view-results" class="secondary-button workout-results-button" type="button">
+                View Results
+            </button>
+        </div>
+        <div class="workout-hud-controls">
+            <button id="workout-cancel" class="workout-cancel-button" type="button">
+                Cancel Workout
+            </button>
+            <a id="workout-return-home" class="secondary-button"
+               href="{{ url_for('patient_home') }}" hidden>
+                Back to Patient Home
+            </a>
+            <a id="workout-return-setup" href="{{ url_for('selection', patient_id=patient_id) }}" hidden>
+                Return to Setup
+            </a>
+        </div>
+        <output id="workout-action-message"
+                class="workout-action-message"
+                role="status"
+                aria-live="polite"></output>
+    </section>
 
+    <section class="live-status-strip" aria-label="Live assessment status">
+        <div class="primary-repetition">
+            <span class="workspace-label">Completed repetitions</span>
+            <strong id="rep-count">0</strong>
+        </div>
+        <div class="status-metric">
+            <span class="workspace-label">Latest completed rep</span>
+            <strong id="current-score">0%</strong>
+        </div>
+        <div class="status-metric">
+            <span class="workspace-label">Session average</span>
+            <strong id="average-score">0%</strong>
+        </div>
+    </section>
+
+    <section class="assessment-workspace">
+        <section class="camera-stage" aria-labelledby="camera-title">
+            <div class="workspace-panel-header">
+                <div>
+                    <p class="workspace-eyebrow">Movement visualization</p>
+                    <h2 id="camera-title">Live camera</h2>
+                </div>
+                <span class="camera-stream-label">POSE OVERLAY</span>
+            </div>
             <img
-                src="{{ url_for('video_feed') }}"
+                id="video-feed"
                 alt="Live Camera Feed"
+                class="camera-stream"
             >
-
+            <output
+                id="perception-readiness"
+                class="perception-readiness"
+                data-state="calibration_required"
+                role="status"
+                aria-live="polite"
+            >Start an assessment to begin pose and side calibration.</output>
+            <output
+                id="perception-calibration"
+                class="perception-calibration"
+                role="status"
+                aria-live="polite"
+            >Start an assessment to begin side calibration.</output>
+            <output
+                id="video-diagnostics"
+                class="video-diagnostics"
+                aria-live="off"
+                hidden
+            ></output>
         </section>
 
-        <!-- ================================================ -->
-        <!-- Sidebar -->
-        <!-- ================================================ -->
-
-        <aside class="session-sidebar">
-
-            <!-- ======================================== -->
-            <!-- Live Assessment -->
-            <!-- ======================================== -->
-
-            <section class="card metrics-panel">
-
-                <div class="panel-header">
-
-                    <h2>Live Assessment</h2>
-
+        <aside class="assessment-panel" aria-label="Assessment performance">
+            <section class="performance-summary" aria-labelledby="performance-title">
+                <div class="workspace-panel-header">
+                    <div>
+                        <p class="workspace-eyebrow">Repetition result</p>
+                        <h2 id="performance-title">Performance</h2>
+                    </div>
+                    <span class="score-context">Latest completed</span>
                 </div>
-
-                <div class="metric">
-
-                    <span>Joint Angles</span>
-
+                <div class="supporting-metrics">
+                    <div class="supporting-metric">
+                        <span>Range of motion</span>
+                        <strong id="rom">--°</strong>
+                    </div>
+                    <div class="supporting-metric">
+                        <span>Best repetition</span>
+                        <strong id="best-score">0%</strong>
+                    </div>
+                    <div class="supporting-metric">
+                        <span>Session trend</span>
+                        <strong id="trend">Collecting Data</strong>
+                    </div>
                 </div>
-
-                <div id="joint-angles">
-
-                    <p>Waiting for assessment...</p>
-
-                </div>
-
-                <hr class="section-divider">
-
-                <div class="metric">
-
-                    <span>Range of Motion</span>
-
-                    <strong id="rom">
-
-                        --°
-
-                    </strong>
-
-                </div>
-
             </section>
 
-            <!-- ======================================== -->
-            <!-- Performance -->
-            <!-- ======================================== -->
-
-            <section class="card performance-panel">
-
-                <div class="panel-header">
-
-                    <h2>Performance</h2>
-
+            <section class="feedback-section" aria-labelledby="feedback-title">
+                <div class="workspace-panel-header">
+                    <div>
+                        <p class="workspace-eyebrow">Latest completed repetition</p>
+                        <h2 id="feedback-title">Movement feedback</h2>
+                    </div>
                 </div>
-
-                <div class="metric">
-
-                    <span>Average Score</span>
-
-                    <strong id="average-score">
-
-                        0%
-
-                    </strong>
-
-                </div>
-
-                <div class="metric">
-
-                    <span>Current Repetition</span>
-
-                    <strong id="current-score">
-
-                        0%
-
-                    </strong>
-
-                </div>
-
-                <div class="metric">
-
-                    <span>Best Repetition</span>
-
-                    <strong id="best-score">
-
-                        0%
-
-                    </strong>
-
-                </div>
-
-                <div class="metric">
-
-                    <span>Trend</span>
-
-                    <strong id="trend">
-
-                        Collecting Data
-
-                    </strong>
-
-                </div>
-
-            </section>
-
-            <!-- ======================================== -->
-            <!-- Clinical Feedback -->
-            <!-- ======================================== -->
-
-            <section class="card feedback-panel">
-
-                <div class="panel-header">
-
-                    <h2>Clinical Feedback</h2>
-
-                    <p class="panel-subtitle">
-
-                        Live observations generated during the assessment.
-
-                    </p>
-
-                </div>
-
                 <ul
                     id="feedback-list"
-                    class="clinical-list"
+                    class="workspace-feedback-list"
                 >
-
-                    <li>
-
-                        Waiting for first repetition...
-
-                    </li>
-
+                    <li>Waiting for first repetition...</li>
                 </ul>
-
             </section>
 
-            <!-- ======================================== -->
-            <!-- Session Controls -->
-            <!-- ======================================== -->
-
-            <section class="card controls-panel">
-
-                <div class="panel-header">
-
-                    <h2>Session Controls</h2>
-
+            <section class="secondary-details" aria-label="Supporting joint angles">
+                <div class="secondary-heading">
+                    <h2>Joint angles</h2>
+                    <span>Supporting metric</span>
                 </div>
+                <div id="joint-angles" class="joint-angle-list">
+                    <p>Waiting for assessment...</p>
+                </div>
+            </section>
 
-                <button
-                    class="btn btn-secondary"
-                    type="button"
-                    disabled
-                >
-
-                    Pause Assessment (Coming Soon)
-
-                </button>
-
-                <div style="height:16px;"></div>
-
+            <div class="assessment-controls" {% if workout_mode %}hidden{% endif %}>
                 <form
                     action="{{ url_for('finish_assessment') }}"
                     method="POST"
                 >
-
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button
-                        class="begin-button"
+                        class="finish-assessment-button"
                         type="submit"
                     >
-
                         Finish Assessment
-
                     </button>
-
                 </form>
-
-            </section>
-
+                <form action="{{ url_for('discard_assessment') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="secondary-button" type="submit">Cancel Assessment</button>
+                </form>
+            </div>
         </aside>
-
     </section>
 
+    <section id="workout-results"
+             class="workout-results"
+             aria-labelledby="workout-results-title"
+             hidden>
+        <div class="workspace-panel-header">
+            <div>
+                <p class="workspace-eyebrow">Session results</p>
+                <h2 id="workout-results-title">Completed Exercises</h2>
+            </div>
+        </div>
+        <ol id="workout-results-list" class="workout-results-list"></ol>
+    </section>
 </div>
 
 {% endblock %}

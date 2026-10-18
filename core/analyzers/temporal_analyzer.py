@@ -18,6 +18,8 @@ import time
 from core.models import (
     Skeleton,
     MovementMetrics,
+    ExerciseProfile,
+    ExerciseType,
 )
 
 
@@ -37,6 +39,7 @@ class TemporalAnalyzer:
         self,
         skeleton: Skeleton,
         metrics: MovementMetrics,
+        profile: ExerciseProfile | None = None,
     ):
         """
         Updates temporal movement metrics using the
@@ -55,7 +58,19 @@ class TemporalAnalyzer:
 
         angle = None
 
-        if metrics.elbow_angle_left is not None:
+        if (
+            profile is not None
+            and profile.exercise == ExerciseType.LEFT_BICEP_CURL
+        ):
+            angle = metrics.elbow_angle_left
+
+        elif (
+            profile is not None
+            and profile.exercise == ExerciseType.RIGHT_BICEP_CURL
+        ):
+            angle = metrics.elbow_angle_right
+
+        elif metrics.elbow_angle_left is not None:
             angle = metrics.elbow_angle_left
 
         elif metrics.elbow_angle_right is not None:

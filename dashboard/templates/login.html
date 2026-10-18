@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Sign in | Revaliv{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-shell">
+    <section class="auth-card" aria-labelledby="login-heading">
+        <div class="auth-brand">Revaliv</div>
+        <p class="auth-kicker">Rehabilitation, reimagined</p>
+        <h1 id="login-heading">Welcome back</h1>
+        <p class="auth-description">
+            {% if clinician_entry %}
+            Clinician access for patient assessment and progress review.
+            {% else %}
+            Sign in to continue your personalized rehabilitation journey.
+            {% endif %}
+        </p>
+        {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+        <form class="auth-form" method="post" action="{{ url_for('login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if clinician_entry %}<input type="hidden" name="clinician_entry" value="1">{% endif %}
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" required autocomplete="username" autofocus>
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password">
+            <button class="auth-submit" type="submit">Sign in</button>
+        </form>
+        <p class="auth-footer">New to Revaliv? <a href="{{ url_for('register') }}">Create a patient account</a></p>
+        <div class="auth-divider" aria-hidden="true"><span>or</span></div>
+        <p class="auth-clinician-access">
+            {% if clinician_entry %}
+            <span>Patient account?</span>
+            <a href="{{ url_for('login') }}">Patient sign in <span aria-hidden="true">→</span></a>
+            {% else %}
+            <a href="{{ url_for('clinician_login') }}">Clinician sign in <span aria-hidden="true">→</span></a>
+            {% endif %}
+        </p>
+    </section>
+</main>
+{% endblock %}

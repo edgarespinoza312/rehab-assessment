@@ -14,7 +14,12 @@ This module intentionally performs no image processing,
 pose estimation, or assessment.
 """
 
+import logging
+
 import cv2
+
+
+logger = logging.getLogger(__name__)
 
 
 class VisionEngine:
@@ -43,11 +48,16 @@ class VisionEngine:
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.camera.set(cv2.CAP_PROP_FPS, 30)
 
-        # CHANGED: print diagnostics
-        print("Camera index:", self.camera_index)
-        print("Buffer size:", self.camera.get(cv2.CAP_PROP_BUFFERSIZE))
+        logger.debug(
+            "Camera index %s, buffer size %s",
+            self.camera_index,
+            self.camera.get(cv2.CAP_PROP_BUFFERSIZE),
+        )
 
         if not self.camera.isOpened():
+            camera, self.camera = self.camera, None
+            if camera is not None:
+                camera.release()
             raise RuntimeError("Unable to open webcam.")
 
     def get_frame(self):
@@ -65,15 +75,17 @@ class VisionEngine:
 
         success, frame = self.camera.read()
 
-        if not success:
+        if not success or frame is None:
             raise RuntimeError("Failed to capture frame.")
 
         return frame
 
     def stop(self):
-        """Releases the webcam."""
+        """Releases the webcam and clears the handle, safely more than once."""
 
-        if self.camera is not None:
-            self.camera.release()
-
-        cv2.destroyAllWindows()
+        camera, self.camera = self.camera, None
+        if camera is not None:
+            try:
+                camera.release()
+            finally:
+                cv2.destroyAllWindows()

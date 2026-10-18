@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}My Results | Revaliv{% endblock %}
+{% block content %}
+{% set active_page = 'results' %}
+{% include "_patient_navigation.html" %}
+<section class="patient-dashboard">
+    <header class="patient-page-header">
+        <div>
+            <p class="workspace-eyebrow">Patient dashboard</p>
+            <h1>My Results</h1>
+            <p class="panel-subtitle">Review your completed assessments and workouts.</p>
+            <a href="/patient">Back to Patient Home</a>
+        </div>
+        <a class="btn btn-primary" href="{{ url_for('patient_selection') }}">Start Exercise</a>
+    </header>
+    <section class="patient-result-list" aria-label="Recent assessments">
+    {% if results %}
+        {% for result in results | reverse %}
+        <article class="patient-result-card">
+            <div class="patient-result-card-header">
+                <div>
+                    <p class="workspace-eyebrow">{{ result.source_type.replace("_", " ")|title }}</p>
+                    <h2>{{ result.exercise_display_name }}</h2>
+                    <p class="patient-result-date">{{ result.occurred_at.strftime("%B %-d, %Y") }}{% if result.side %} · {{ result.side|capitalize }}{% endif %}</p>
+                </div>
+                <strong class="patient-result-score">{{ ("%.1f%%" | format(result.overall_score)) if result.overall_score is not none else "—" }}</strong>
+            </div>
+            <div class="patient-result-metrics">
+                <span><small>Repetitions</small>{{ result.completed_repetitions if result.completed_repetitions is not none else "—" }}{% if result.target_repetitions is not none %} / {{ result.target_repetitions }}{% endif %}</span>
+                <span><small>Completion</small>{{ ("%.1f%%" | format(result.completion_percentage)) if result.completion_percentage is not none else "—" }}</span>
+                <span><small>Resistance</small>{{ result.resistance_value if result.resistance_value is not none else "—" }}{% if result.resistance_unit %} {{ result.resistance_unit }}{% endif %}</span>
+            </div>
+            <a class="patient-result-link" href="{{ url_for('patient_result_detail', source_type=result.source_type, source_id=result.source_id) }}">View Details <span aria-hidden="true">→</span></a>
+        </article>
+        {% endfor %}
+    {% else %}
+        <section class="card empty-state"><h2>No completed results yet</h2><p>Your completed assessment results will appear here.</p></section>
+    {% endif %}
+    </section>
+</section>
+{% endblock %}

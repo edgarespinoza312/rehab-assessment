@@ -15,7 +15,7 @@ Assessment Report
     <div class="page-header">
 
         <div style="color:var(--primary);font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:.85rem;">
-            Neuromotion Clinical Report
+            Revaliv Clinical Report
         </div>
 
         <h1 style="margin-top:8px;">
@@ -159,6 +159,7 @@ Assessment Report
 
         <form action="{{ url_for('update_assessment_notes', assessment_id=assessment.assessment_id) }}"
               method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <textarea
                 name="notes"
@@ -196,12 +197,12 @@ Assessment Report
         </a>
 
         {% else %}
-
         <div style="display:flex;gap:16px;flex-wrap:wrap;">
 
             <form action="{{ url_for('save_assessment') }}"
                   method="POST"
                   style="flex:1;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <button class="btn btn-primary"
                         style="width:100%;"
@@ -216,6 +217,7 @@ Assessment Report
             <form action="{{ url_for('discard_assessment') }}"
                   method="POST"
                   style="flex:1;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <button class="btn"
                         style="width:100%;"
@@ -228,6 +230,12 @@ Assessment Report
             </form>
 
         </div>
+        {% if patient and patient_view %}
+        <nav class="patient-page-actions" aria-label="Report navigation">
+            <a class="secondary-button" href="{{ url_for('patient_home') }}">Back to Patient Home</a>
+            <a class="secondary-button" href="{{ url_for('patient_progress') }}">My Progress</a>
+        </nav>
+        {% endif %}
 
         {% endif %}
 

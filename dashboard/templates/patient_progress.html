@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}My Progress | Revaliv{% endblock %}
+{% block content %}
+{% set active_page = 'progress' %}
+{% include "_patient_navigation.html" %}
+<section class="patient-dashboard">
+    <header class="patient-page-header">
+        <div>
+            <p class="workspace-eyebrow">Patient dashboard</p>
+            <h1>My Progress</h1>
+            <p class="panel-subtitle">Track your rehabilitation history over time.</p>
+        </div>
+        <a class="btn btn-primary" href="{{ url_for('patient_selection') }}">Start Exercise</a>
+    </header>
+
+    <section class="patient-stat-grid" aria-label="Progress summary">
+        <article class="metric-card">
+            <span class="metric-title">Overall Score</span>
+            <strong class="metric-value">
+                {% set scores = results | selectattr("overall_score", "ne", none) | map(attribute="overall_score") | list %}
+                {{ ("%.1f%%" | format(scores[-1])) if scores else "—" }}
+            </strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-title">Completed Reps</span>
+            <strong class="metric-value">
+                {% set reps = results | selectattr("completed_repetitions", "ne", none) | map(attribute="completed_repetitions") | list %}
+                {{ reps[-1] if reps else "—" }}
+            </strong>
+        </article>
+        <article class="metric-card">
+            <span class="metric-title">Recorded Sessions</span>
+            <strong class="metric-value">{{ results | length }}</strong>
+        </article>
+    </section>
+
+    <section class="card patient-progress-chart-card" aria-labelledby="progress-chart-title">
+        <div class="panel-header">
+            <h2 id="progress-chart-title">Progress Over Time</h2>
+            <p class="panel-subtitle">Scores and completed repetitions from your own recorded assessments and workouts.</p>
+        </div>
+        <div class="progress-controls">
+            <label>Exercise
+                <select id="progress-exercise" aria-label="Exercise"></select>
+            </label>
+            <label>Side
+                <select id="progress-side" aria-label="Side">
+                    <option value="">All sides</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                </select>
+            </label>
+            <label>Metric
+                <select id="progress-metric" aria-label="Progress metric">
+                    <option value="overall_score">Overall Score</option>
+                    <option value="completed_repetitions">Completed Repetitions</option>
+                    <option value="resistance_value">Resistance</option>
+                </select>
+            </label>
+        </div>
+        <div class="progress-chart-wrap">
+            <p class="progress-status" id="progress-status" role="status">Loading progression history...</p>
+            <div class="progress-summary" id="progress-summary" hidden>
+                <div class="progress-summary-card"><span class="progress-summary-label">Latest</span><span class="progress-summary-value" id="progress-latest">—</span></div>
+                <div class="progress-summary-card"><span class="progress-summary-label">Previous</span><span class="progress-summary-value" id="progress-previous">—</span></div>
+                <div class="progress-summary-card"><span class="progress-summary-label">Change</span><span class="progress-summary-value" id="progress-change">—</span></div>
+            </div>
+            <svg class="progress-chart" id="patient-progress-chart" viewBox="0 0 800 390" role="img" aria-label="Patient progression chart"></svg>
+            <div class="progress-tooltip" id="progress-tooltip" role="status"></div>
+            <div class="progress-empty" id="progress-empty" hidden></div>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="recent-sessions-title">
+        <div class="panel-header">
+            <h2 id="recent-sessions-title">Recent Sessions</h2>
+        </div>
+        {% if results %}
+        <div class="patient-session-list">
+            {% for result in results | reverse %}
+            <a class="patient-session-row" href="{{ url_for('patient_result_detail', source_type=result.source_type, source_id=result.source_id) }}">
+                <span><strong>{{ result.occurred_at.strftime("%b %-d, %Y") }}</strong><small>{{ result.exercise_display_name }}{% if result.side %} · {{ result.side|capitalize }}{% endif %}</small></span>
+                <span class="patient-session-score">{{ ("%.1f%%" | format(result.overall_score)) if result.overall_score is not none else "—" }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">No progression history yet. Complete an assessment to begin tracking your progress.</p>
+        {% endif %}
+    </section>
+</section>
+<section hidden aria-hidden="true">
+    <div id="advisory-status"></div>
+    <div id="advisory-content"></div>
+    <div id="advisory-empty"></div>
+    <div id="advisory-exercise"></div>
+    <div id="advisory-side"></div>
+    <div id="advisory-count"></div>
+    <div id="advisory-classification"><span id="advisory-classification-value"></span></div>
+    <div id="advisory-reasons"></div>
+    <div id="advisory-evidence"></div>
+    <div id="advisory-limitations"></div>
+    <form id="advisory-review-form"></form>
+    <select id="review-disposition"></select>
+    <input id="reviewer-reference">
+    <textarea id="review-note"></textarea>
+    <div id="review-status"></div>
+    <div id="review-current-status"></div>
+    <div id="review-last-reviewed"></div>
+    <div id="review-history"></div>
+</section>
+<script id="patient-progress-config" type="application/json">{{ {"patient_id": current_identity.patient_id, "patient_portal": true}|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/patient_progress.js') }}"></script>
+{% endblock %}

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>New Patient | Neuromotion Clinical Portal</title>
+<title>New Patient | Revaliv Clinical Portal</title>
 
 <style>
 *{
@@ -166,7 +166,7 @@ button:hover{
     <div class="header">
 
         <div class="portal">
-            Neuromotion Clinical Portal
+            Revaliv Clinical Portal
         </div>
 
         <h1>Create New Patient</h1>
@@ -180,6 +180,7 @@ button:hover{
     <div class="card">
 
         <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="section">
 

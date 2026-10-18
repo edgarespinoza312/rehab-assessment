@@ -11,15 +11,20 @@ import cv2
 
 from core.vision import VisionEngine
 
-print("Creating VisionEngine...")
-vision = VisionEngine()
 
-vision.start()
+def main():
+    print("Creating VisionEngine...")
+    vision = VisionEngine()
 
-frame = vision.get_frame()
+    try:
+        vision.start()
+        frame = vision.get_frame()
+        cv2.imwrite("test_frame.jpg", frame)
+    finally:
+        vision.stop()
 
-cv2.imwrite("test_frame.jpg", frame)
+    print("Saved test_frame.jpg")
 
-vision.stop()
 
-print("Saved test_frame.jpg")
+if __name__ == "__main__":
+    main()

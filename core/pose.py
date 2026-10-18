@@ -14,6 +14,9 @@ This module intentionally performs no biomechanics,
 exercise recognition, repetition counting, or assessment.
 """
 
+import os
+import time
+
 import cv2
 import mediapipe as mp
 
@@ -65,12 +68,20 @@ class PoseEngine:
     Runs MediaPipe Pose on incoming camera frames.
     """
 
-    def _build_skeleton(self, results):
+    def _build_skeleton(
+        self,
+        results,
+        timestamp: float = 0.0,
+        frame_number: int = 0,
+    ):
         """
         Builds the ESPZ Rehabilitation Skeleton from MediaPipe landmarks.
         """
 
-        skeleton = Skeleton()
+        skeleton = Skeleton(
+            timestamp=timestamp,
+            frame_number=frame_number,
+        )
 
         if not results.pose_landmarks:
             return skeleton
@@ -325,24 +336,61 @@ class PoseEngine:
             JointType.SHOULDER_CENTER,
         )
 
-    def __init__(self):
+    def __init__(
+        self,
+        model_complexity: int | None = None,
+        smooth_landmarks: bool | None = None,
+    ):
         """
-        Initializes the MediaPipe Pose model.
+        Initializes MediaPipe Pose with production defaults unless explicitly
+        overridden or selected through developer-only environment variables.
         """
 
         self.mp_pose = mp.solutions.pose
         self.mp_drawing = mp.solutions.drawing_utils
 
+        if model_complexity is None:
+            model_complexity = int(
+                os.environ.get("REVALIV_POSE_COMPLEXITY", "1")
+            )
+        if model_complexity not in (0, 1, 2):
+            raise ValueError(
+                "model_complexity must be 0, 1, or 2."
+            )
+
+        if smooth_landmarks is None:
+            smoothing_setting = os.environ.get(
+                "REVALIV_POSE_SMOOTHING",
+                "1",
+            ).strip().lower()
+            if smoothing_setting not in {
+                "0", "1", "false", "true", "no", "yes", "off", "on"
+            }:
+                raise ValueError(
+                    "REVALIV_POSE_SMOOTHING must be a boolean value."
+                )
+            smooth_landmarks = smoothing_setting in {"1", "true", "yes", "on"}
+
+        self.configuration = {
+            "static_image_mode": False,
+            "model_complexity": model_complexity,
+            "smooth_landmarks": smooth_landmarks,
+            "enable_segmentation": False,
+            "min_detection_confidence": 0.5,
+            "min_tracking_confidence": 0.5,
+        }
+
         self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            smooth_landmarks=True,
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+            **self.configuration,
         )
 
-    def process(self, frame):
+    def process(
+        self,
+        frame,
+        timestamp: float = 0.0,
+        frame_number: int = 0,
+        performance=None,
+    ):
         """
         Processes a single camera frame.
 
@@ -355,16 +403,30 @@ class PoseEngine:
         """
 
         # Convert BGR → RGB
+        stage_started = performance.start_timer() if performance is not None else None
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if performance is not None:
+            performance.stop_timer("perception_preprocessing", stage_started)
 
         # Run pose estimation
+        stage_started = performance.start_timer() if performance is not None else None
         results = self.pose.process(rgb_frame)
+        if performance is not None:
+            performance.stop_timer("model_inference", stage_started)
 
         # Build skeleton
-        skeleton = self._build_skeleton(results)
-
-        
-    
+        stage_started = (
+            performance.start_timer()
+            if performance is not None
+            else None
+        )
+        skeleton = self._build_skeleton(
+            results,
+            timestamp=timestamp,
+            frame_number=frame_number,
+        )
+        if performance is not None:
+            performance.stop_timer("skeleton_construction", stage_started)
 
         # Copy frame for visualization
         annotated_frame = frame.copy()

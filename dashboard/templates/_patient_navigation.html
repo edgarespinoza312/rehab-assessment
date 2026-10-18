@@ -1,0 +1,9 @@
+<nav class="patient-navigation" aria-label="Patient navigation">
+    <a class="{% if active_page == 'home' %}is-current{% endif %}"
+       href="{{ url_for('patient_home') }}">Home</a>
+    <a href="{{ url_for('patient_selection') }}">Start Exercise</a>
+    <a class="{% if active_page == 'results' %}is-current{% endif %}"
+       href="{{ url_for('patient_results') }}">My Results</a>
+    <a class="{% if active_page == 'progress' %}is-current{% endif %}"
+       href="{{ url_for('patient_progress') }}">My Progress</a>
+</nav>

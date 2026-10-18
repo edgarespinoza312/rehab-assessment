@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Create account | Revaliv{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-shell">
+    <section class="auth-card" aria-labelledby="register-heading">
+        <div class="auth-brand">Revaliv</div>
+        <p class="auth-kicker">Start your rehabilitation journey</p>
+        <h1 id="register-heading">Create your account</h1>
+        <p class="auth-description">Patient accounts are created securely and linked to a private patient profile.</p>
+        {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+        <form class="auth-form" method="post" action="{{ url_for('register') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="display_name">Name</label>
+            <input id="display_name" name="display_name" type="text" required autocomplete="name" value="{{ form.get('display_name', '') }}">
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" required autocomplete="email" value="{{ form.get('email', '') }}">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="new-password" minlength="8">
+            <label for="confirm_password">Confirm password</label>
+            <input id="confirm_password" name="confirm_password" type="password" required autocomplete="new-password" minlength="8">
+            <button class="auth-submit" type="submit">Create patient account</button>
+        </form>
+        <p class="auth-footer">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
+    </section>
+</main>
+{% endblock %}

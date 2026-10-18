@@ -117,19 +117,19 @@ class ExerciseEngine:
             # Finished a repetition.
 
             if self.state.phase == ExercisePhase.LOWERING:
-
-                self.state.repetitions += 1
-                self.state.rep_completed = True
-
-                # Compute repetition duration.
                 if self.state.rep_start_time is not None:
 
-                    metrics.rep_duration = (
+                    duration = (
                         time.monotonic()
                         - self.state.rep_start_time
                     )
+                    if duration > 0:
+                        metrics.rep_duration = duration
+                        self.state.repetitions += 1
+                        self.state.rep_completed = True
 
-                    self.state.rep_start_time = None
+                # A completion without a valid start is not a scored rep.
+                self.state.rep_start_time = None
 
             self._transition_to(
                 ExercisePhase.LOWERED

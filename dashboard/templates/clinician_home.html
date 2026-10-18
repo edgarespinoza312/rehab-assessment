@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Clinician Portal | Revaliv{% endblock %}
+{% block content %}
+<section class="card">
+    <h1>Clinician Portal</h1>
+    <p>Patient profiles, progression, advisory evidence, and review history.</p>
+    <p><a href="{{ url_for('patient_registry') }}">Patients</a></p>
+    <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Log out</button>
+    </form>
+</section>
+{% endblock %}

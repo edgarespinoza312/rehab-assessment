@@ -12,6 +12,7 @@ a single MovementMetrics object.
 from core.models import (
     Skeleton,
     MovementMetrics,
+    ExerciseProfile,
 )
 
 from core.analyzers.joint_analyzer import JointAnalyzer
@@ -31,18 +32,18 @@ class BiomechanicsEngine:
         Initializes all biomechanics analyzers.
         """
 
+        self._joint_analyzer = JointAnalyzer()
+        self._stability_analyzer = StabilityAnalyzer()
+        self._temporal_analyzer = TemporalAnalyzer()
+        self._compensation_analyzer = CompensationAnalyzer()
+        self._symmetry_analyzer = SymmetryAnalyzer()
+
         self._analyzers = [
-
-            JointAnalyzer(),
-
-            StabilityAnalyzer(),
-
-            TemporalAnalyzer(),
-
-            CompensationAnalyzer(),
-
-            SymmetryAnalyzer(),
-
+            self._joint_analyzer,
+            self._stability_analyzer,
+            self._temporal_analyzer,
+            self._compensation_analyzer,
+            self._symmetry_analyzer,
         ]
 
     # ==========================================================
@@ -52,6 +53,7 @@ class BiomechanicsEngine:
     def calculate_metrics(
         self,
         skeleton: Skeleton,
+        profile: ExerciseProfile | None = None,
     ) -> MovementMetrics:
         """
         Calculates all biomechanical measurements for
@@ -61,11 +63,13 @@ class BiomechanicsEngine:
         metrics = MovementMetrics()
 
         for analyzer in self._analyzers:
-
-            analyzer.analyze(
-                skeleton,
-                metrics,
-            )
+            if (
+                analyzer is self._joint_analyzer
+                or analyzer is self._temporal_analyzer
+            ):
+                analyzer.analyze(skeleton, metrics, profile)
+            else:
+                analyzer.analyze(skeleton, metrics)
 
         return metrics
 

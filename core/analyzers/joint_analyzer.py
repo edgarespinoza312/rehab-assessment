@@ -21,6 +21,8 @@ from core.models import (
     JointType,
     Skeleton,
     MovementMetrics,
+    ExerciseProfile,
+    ExerciseType,
 )
 
 
@@ -47,6 +49,7 @@ class JointAnalyzer:
         self,
         skeleton: Skeleton,
         metrics: MovementMetrics,
+        profile: ExerciseProfile | None = None,
     ):
         """
         Computes all joint-related biomechanics.
@@ -55,6 +58,7 @@ class JointAnalyzer:
         self._calculate_upper_limb_metrics(
             skeleton,
             metrics,
+            profile,
         )
 
         self._calculate_lower_limb_metrics(
@@ -78,6 +82,7 @@ class JointAnalyzer:
         self,
         skeleton: Skeleton,
         metrics: MovementMetrics,
+        profile: ExerciseProfile | None = None,
     ):
         """
         Calculates upper-limb biomechanics.
@@ -109,7 +114,19 @@ class JointAnalyzer:
     # Select Active Measurement
     # ------------------------------------------------------
 
-        if metrics.elbow_angle_left is not None:
+        if (
+            profile is not None
+            and profile.exercise == ExerciseType.LEFT_BICEP_CURL
+        ):
+            active_angle = metrics.elbow_angle_left
+
+        elif (
+            profile is not None
+            and profile.exercise == ExerciseType.RIGHT_BICEP_CURL
+        ):
+            active_angle = metrics.elbow_angle_right
+
+        elif metrics.elbow_angle_left is not None:
 
             active_angle = metrics.elbow_angle_left
 
@@ -119,6 +136,9 @@ class JointAnalyzer:
 
         else:
 
+            return
+
+        if active_angle is None:
             return
 
     # ------------------------------------------------------

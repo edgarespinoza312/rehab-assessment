@@ -80,10 +80,10 @@ Assessment Setup
 
             <div class="panel-header">
 
-                <h2>Assessment Configuration</h2>
+                <h2>Legacy Assessment</h2>
 
                 <p class="panel-subtitle">
-                    Select the rehabilitation exercise to evaluate during this assessment session.
+                    Select one exercise for a standalone assessment session.
                 </p>
 
             </div>
@@ -93,6 +93,7 @@ Assessment Setup
                 action="{{ url_for('start_assessment') }}"
                 method="POST"
             >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <!-- Carry the selected patient through the assessment -->
                 <input
@@ -131,6 +132,88 @@ Assessment Setup
 
         </section>
 
+    </section>
+
+    <section class="card workout-preset-card" aria-labelledby="workout-preset-title">
+        <div class="panel-header">
+            <div>
+                <p class="workout-mode-label">Separate workflow</p>
+                <h2 id="workout-preset-title">Workout Mode</h2>
+                <p class="panel-subtitle">
+                    Complete a prescribed sequence while keeping the existing live assessment visualization.
+                </p>
+            </div>
+        </div>
+
+        <div class="workout-plan-toolbar">
+            <a class="secondary-button workout-builder-link"
+               href="{{ url_for('workout_builder', patient_id=patient_id) }}">
+                Create Custom Workout
+            </a>
+            {% if not patient_id %}
+            <label for="workout-patient-selector">Patient required to start
+                <select id="workout-patient-selector" required>
+                    <option value="">Select a patient</option>
+                    {% for patient in patients %}
+                    <option value="{{ patient.patient_id }}">
+                        {{ patient.last_name }}, {{ patient.first_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% else %}
+            <input id="workout-patient-selector"
+                   type="hidden"
+                   value="{{ patient_id }}">
+            {% endif %}
+        </div>
+
+        <h3 class="workout-subsection-title">Saved Workouts</h3>
+        {% if workout_plans %}
+        <div class="workout-saved-plan-list">
+            {% for plan in workout_plans %}
+            <article class="workout-preset workout-saved-plan"
+                     data-plan-id="{{ plan.plan_id }}"
+                     data-patient-id="{{ patient_id or '' }}">
+                <div>
+                    <h4>{{ plan.name }}</h4>
+                    <p>{{ plan.scope|title }} · {{ plan.exercise_count }} exercises</p>
+                    {% if plan.description %}<p>{{ plan.description }}</p>{% endif %}
+                </div>
+                <button class="begin-button workout-plan-start-button" type="button">
+                    Start Workout
+                </button>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="panel-subtitle">No saved workouts are available for this patient yet.</p>
+        {% endif %}
+
+        <h3 class="workout-subsection-title">Development Starter Preset</h3>
+        {% for preset in workout_presets %}
+        <article class="workout-preset"
+                 data-preset-id="{{ preset.id }}"
+                 data-patient-id="{{ patient_id or '' }}">
+            <h3>{{ preset.name }}</h3>
+            <p class="workout-preset-description">{{ preset.description }}</p>
+            <ol class="workout-preset-exercises">
+                {% for item in preset.exercises %}
+                <li>
+                    <span>{{ item.name }}</span>
+                    <strong>{{ item.target_repetitions }} reps</strong>
+                </li>
+                {% endfor %}
+            </ol>
+            <button class="begin-button workout-start-button" type="button">
+                Start Workout
+            </button>
+        </article>
+        {% endfor %}
+        <output id="workout-start-message"
+                class="workout-action-message"
+                role="status"
+                aria-live="polite"></output>
     </section>
 
     <!-- ===================================================== -->

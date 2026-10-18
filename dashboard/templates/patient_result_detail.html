@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Result Details | Revaliv{% endblock %}
+{% block content %}
+{% set active_page = 'results' %}
+{% include "_patient_navigation.html" %}
+<section class="patient-dashboard">
+    <header class="patient-page-header">
+        <div>
+            <p class="workspace-eyebrow">Assessment result</p>
+            <h1>{{ result.exercise_display_name }}</h1>
+            <p class="panel-subtitle">{{ result.occurred_at.strftime("%B %-d, %Y") }}{% if result.side %} · {{ result.side|capitalize }}{% endif %}</p>
+        </div>
+        <strong class="patient-result-score">{{ ("%.1f%%" | format(result.overall_score)) if result.overall_score is not none else "—" }}</strong>
+    </header>
+    <section class="patient-detail-grid">
+        <div class="metric-card"><span class="metric-title">Completed Repetitions</span><strong class="metric-value">{{ result.completed_repetitions if result.completed_repetitions is not none else "—" }}</strong></div>
+        <div class="metric-card"><span class="metric-title">Target Repetitions</span><strong class="metric-value">{{ result.target_repetitions if result.target_repetitions is not none else "—" }}</strong></div>
+        <div class="metric-card"><span class="metric-title">Completion</span><strong class="metric-value">{{ ("%.1f%%" | format(result.completion_percentage)) if result.completion_percentage is not none else "—" }}</strong></div>
+    </section>
+    <nav class="patient-page-actions" aria-label="Result navigation">
+        <a class="btn btn-secondary" href="{{ url_for('patient_results') }}">Back to Results</a>
+        <a class="btn btn-secondary" href="{{ url_for('patient_home') }}">Back to Patient Home</a>
+    </nav>
+</section>
+{% endblock %}

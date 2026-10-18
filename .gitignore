@@ -1,2 +1,15 @@
 .venv/
 .venv/
+*.engine
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Local databases and backups
+*.db
+*.db-*
+*.bak
+
+# Local test artifacts pending review
+test.jpg

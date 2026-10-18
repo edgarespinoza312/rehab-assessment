@@ -148,6 +148,16 @@ const exerciseButtons =
 
 if (exerciseButtons.length > 0) {
 
+    const patientSelector = document.getElementById("workout-patient-selector");
+    if (patientSelector?.tagName === "SELECT") {
+        patientSelector.addEventListener("change", () => {
+            if (!patientSelector.value) return;
+            window.location.assign(
+                `/selection?patient_id=${encodeURIComponent(patientSelector.value)}`,
+            );
+        });
+    }
+
     exerciseButtons.forEach(button => {
 
         button.addEventListener("change", () => {
@@ -172,5 +182,92 @@ if (exerciseButtons.length > 0) {
         );
 
     }
+
+    document.querySelectorAll(".workout-start-button").forEach(button => {
+        button.addEventListener("click", async () => {
+            const preset = button.closest(".workout-preset");
+            const message = document.getElementById("workout-start-message");
+            if (!preset || !message) return;
+
+            button.disabled = true;
+            message.textContent = "Starting workout and preparing calibration…";
+            const patientId = document.getElementById(
+                "workout-patient-selector",
+            )?.value || preset.dataset.patientId;
+            const payload = {
+                preset_id: preset.dataset.presetId,
+                patient_id: patientId ? Number(patientId) : null,
+            };
+
+            try {
+                const response = await fetch("/workout/start", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": document.querySelector(
+                            'meta[name="csrf-token"]',
+                        )?.content || "",
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `Workout start failed (${response.status})`);
+                }
+
+                const query = patientId
+                    ? `?patient_id=${encodeURIComponent(patientId)}`
+                    : "";
+                window.location.assign(`/assessment${query}`);
+            } catch (error) {
+                message.textContent = error.message;
+                button.disabled = false;
+            }
+        });
+    });
+
+    document.querySelectorAll(".workout-plan-start-button").forEach(button => {
+        button.addEventListener("click", async () => {
+            const plan = button.closest(".workout-saved-plan");
+            const message = document.getElementById("workout-start-message");
+            if (!plan || !message) return;
+
+            const patientId = document.getElementById(
+                "workout-patient-selector",
+            )?.value || plan.dataset.patientId;
+            if (!patientId) {
+                message.textContent = "Select a patient before starting a workout.";
+                return;
+            }
+
+            button.disabled = true;
+            message.textContent = "Starting saved workout and preparing calibration…";
+            try {
+                const response = await fetch("/workout/start", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-Token": document.querySelector(
+                            'meta[name="csrf-token"]',
+                        )?.content || "",
+                    },
+                    body: JSON.stringify({
+                        plan_id: Number(plan.dataset.planId),
+                        patient_id: Number(patientId),
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `Workout start failed (${response.status})`);
+                }
+                window.location.assign(
+                    `/assessment?patient_id=${encodeURIComponent(patientId)}`,
+                );
+            } catch (error) {
+                message.textContent = error.message;
+                button.disabled = false;
+            }
+        });
+    });
 
 }
