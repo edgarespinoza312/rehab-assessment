@@ -5,6 +5,7 @@ from unittest.mock import patch
 from dashboard.app import (
     app,
     runtime_registry,
+    video_consumer_guard,
     _generate_frames,
     _expire_idle_runtime_contexts,
     _release_runtime_context,
@@ -67,6 +68,21 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
             "patient_id": patient_id,
         })
         self.assertEqual(response.status_code, 302)
+
+    def test_unavailable_camera_returns_503_and_releases_video_lease(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+
+        with patch.object(app.vision, "camera", None), patch.object(
+            app.vision, "start", side_effect=RuntimeError("camera unavailable")
+        ):
+            response = client.get("/video_feed")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json(), {"error": "camera unavailable"})
+        self.assertFalse(video_consumer_guard.active)
+        self.assertEqual(client.get("/patient").status_code, 200)
 
     def test_two_users_receive_independent_owned_runtimes(self):
         client_a = app.test_client()
