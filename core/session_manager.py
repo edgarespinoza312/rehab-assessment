@@ -38,7 +38,6 @@ class SessionManager:
 
         self._results.append(result)
 
-        print(f"Stored repetition #{len(self._results)}")
 
     def clear(self) -> None:
         """
