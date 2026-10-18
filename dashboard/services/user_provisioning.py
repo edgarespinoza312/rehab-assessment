@@ -35,9 +35,10 @@ def create_user(*, display_name, email, password, role, patient_id=None):
             f"display_name must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
         )
     normalized_email = normalize_email(email)
+    if role not in VALID_ROLES:
+        raise ValueError(f"invalid role: {role}")
     if User.query.filter_by(email=normalized_email).first() is not None:
         raise ValueError("email is already in use")
-    role_obj = _role(role)
     patient = None
     if patient_id is not None:
         patient = db.session.get(Patient, patient_id)
@@ -45,18 +46,25 @@ def create_user(*, display_name, email, password, role, patient_id=None):
             raise ValueError("patient does not exist")
         if User.query.filter_by(patient_id=patient_id).first() is not None:
             raise ValueError("patient is already linked")
-    user = User(
-        display_name=normalized_display_name,
-        email=normalized_email,
-        password_hash=hash_password(password),
-        status="ACTIVE",
-        patient=patient,
-    )
-    user.roles.append(role_obj)
-    db.session.add(user)
-    db.session.commit()
-    return user
 
+    # Validate/hash before creating a role row or any other database state.
+    password_hash = hash_password(password)
+    try:
+        role_obj = _role(role)
+        user = User(
+            display_name=normalized_display_name,
+            email=normalized_email,
+            password_hash=password_hash,
+            status="ACTIVE",
+            patient=patient,
+        )
+        user.roles.append(role_obj)
+        db.session.add(user)
+        db.session.commit()
+        return user
+    except Exception:
+        db.session.rollback()
+        raise
 
 def normalize_email(email: str) -> str:
     if not isinstance(email, str):
