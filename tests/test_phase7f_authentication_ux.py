@@ -6,6 +6,7 @@ from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.services.authentication import hash_password
 from dashboard.services.user_provisioning import (
+    assign_role,
     create_patient_account,
     create_user,
     link_patient,
@@ -155,6 +156,18 @@ class Phase7FAuthenticationTests(unittest.TestCase):
 
         self.assertEqual(Patient.query.count(), initial_patient_count)
         self.assertEqual(User.query.count(), initial_user_count)
+
+    def test_role_assignment_rejects_non_string_role_values(self):
+        user = User.query.filter_by(email="clinician@example.test").one()
+        initial_roles = {role.name for role in user.roles}
+
+        for role in ([], {}, None, 7):
+            with self.subTest(role=role):
+                with self.assertRaisesRegex(ValueError, "invalid role"):
+                    assign_role(user.user_id, role)
+
+        db.session.refresh(user)
+        self.assertEqual({role.name for role in user.roles}, initial_roles)
 
     def test_user_creation_rejects_non_string_role_values(self):
         for index, role in enumerate(([], {}, None, 7)):
