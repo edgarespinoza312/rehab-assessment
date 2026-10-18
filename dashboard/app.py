@@ -717,6 +717,9 @@ def reset_password(token):
         logger.exception("Unable to save a password reset")
         abort(500)
 
+    # Password changes revoke this browser session too; load_identity() rejects
+    # other sessions because their password-bound fingerprint is now stale.
+    logout_user()
     return redirect(url_for("login", password_reset="success"))
 
 
