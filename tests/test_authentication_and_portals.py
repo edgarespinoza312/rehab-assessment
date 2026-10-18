@@ -269,6 +269,44 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_feed").status_code, 404)
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
+    def test_finished_legacy_assessment_no_longer_exposes_camera_endpoints(self):
+        self._login("clinician@example.test", "CLINICIAN")
+        token = self._csrf()
+        started = self.client.post(
+            "/assessment",
+            data={
+                "csrf_token": token,
+                "exercise": "LEFT_BICEP_CURL",
+                "patient_id": 1,
+            },
+        )
+        self.assertEqual(started.status_code, 302)
+
+        finished = self.client.post(
+            "/finish",
+            data={"csrf_token": self._csrf()},
+        )
+        self.assertEqual(finished.status_code, 302)
+        self.assertEqual(self.client.get("/video_feed").status_code, 404)
+        self.assertEqual(self.client.get("/video_status").status_code, 404)
+
+    def test_cancelled_workout_no_longer_exposes_camera_endpoints(self):
+        self._login("clinician@example.test", "CLINICIAN")
+        started = self.client.post(
+            "/workout/start",
+            json={"preset_id": "bilateral_bicep_curl_2", "patient_id": 1},
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(started.status_code, 201)
+
+        cancelled = self.client.post(
+            "/workout/cancel",
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(self.client.get("/video_feed").status_code, 404)
+        self.assertEqual(self.client.get("/video_status").status_code, 404)
+
     def test_clinician_patient_profile_alias_reaches_protected_profile(self):
         self._login("clinician@example.test", "CLINICIAN")
         response = self.client.get(

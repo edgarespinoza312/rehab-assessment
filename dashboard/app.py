@@ -398,6 +398,23 @@ def _require_runtime_patient_access(patient_id: int | None):
         return jsonify({"error": "forbidden"}), 403
     return None
 
+
+def _active_runtime_patient_id(context) -> int | None:
+    """Return the patient only while this context owns an active assessment."""
+    if context.runtime_mode == RuntimeMode.WORKOUT_SESSION.value:
+        workout = context.workout_runtime
+        if workout is not None and workout.active:
+            return workout.snapshot().patient_id
+        return None
+
+    if (
+        context.runtime_mode == RuntimeMode.LEGACY_ASSESSMENT.value
+        and context.session is not None
+        and context.completed_session is None
+    ):
+        return context.session.patient_id
+    return None
+
 # ==========================================================
 # Routes
 # ==========================================================
@@ -1918,16 +1935,9 @@ def video_feed():
     if context is None:
         return jsonify({"error": "no active runtime"}), 404
     with context.lock:
-        session = context.session
-        session_manager = context.session_manager
-        runtime_patient_id = (
-            context.session.patient_id if context.session is not None
-            else context.workout_runtime.snapshot().patient_id
-            if context.workout_runtime is not None
-            else None
-        )
+        runtime_patient_id = _active_runtime_patient_id(context)
     if runtime_patient_id is None:
-        return jsonify({"error": "no patient-linked assessment session"}), 404
+        return jsonify({"error": "no active patient-linked assessment"}), 404
     patient_access_error = _require_runtime_patient_access(runtime_patient_id)
     if patient_access_error is not None:
         return patient_access_error
@@ -1971,14 +1981,9 @@ def video_status():
     if context is None:
         return jsonify({"error": "no active runtime"}), 404
     with context.lock:
-        runtime_patient_id = (
-            context.session.patient_id if context.session is not None
-            else context.workout_runtime.snapshot().patient_id
-            if context.workout_runtime is not None
-            else None
-        )
+        runtime_patient_id = _active_runtime_patient_id(context)
     if runtime_patient_id is None:
-        return jsonify({"error": "no patient-linked assessment session"}), 404
+        return jsonify({"error": "no active patient-linked assessment"}), 404
     patient_access_error = _require_runtime_patient_access(runtime_patient_id)
     if patient_access_error is not None:
         return patient_access_error
