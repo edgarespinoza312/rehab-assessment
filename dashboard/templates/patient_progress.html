@@ -35,9 +35,32 @@
     </section>
 
     <section class="card patient-progress-chart-card" aria-labelledby="progress-chart-title">
-        <div class="panel-header">
-            <h2 id="progress-chart-title">Progress Over Time</h2>
-            <p class="panel-subtitle">Scores and completed repetitions from your own recorded assessments and workouts.</p>
+        <div class="progress-chart-header">
+            <div class="progress-chart-heading">
+                <span class="progress-chart-icon" aria-hidden="true">
+                    <svg viewBox="0 0 32 32" focusable="false">
+                        <path d="M5 25V7M5 25H27M9 20l6-7 4 3 7-8"></path>
+                        <path d="M21 8h5v5"></path>
+                    </svg>
+                </span>
+                <div class="panel-header">
+                    <h2 id="progress-chart-title">Progress Over Time</h2>
+                    <p class="panel-subtitle">Scores and completed repetitions from your own recorded assessments and workouts.</p>
+                </div>
+            </div>
+            <aside class="progress-latest-callout" id="progress-latest-callout" aria-label="Latest selected metric" hidden>
+                <span class="progress-callout-icon" aria-hidden="true">
+                    <svg viewBox="0 0 32 32" focusable="false">
+                        <path d="M10 5h12v8a6 6 0 0 1-12 0V5Z"></path>
+                        <path d="M10 8H5v3a5 5 0 0 0 5 5M22 8h5v3a5 5 0 0 1-5 5M16 19v6M11 27h10"></path>
+                    </svg>
+                </span>
+                <span class="progress-callout-copy">
+                    <span class="progress-callout-label" id="progress-latest-label">Latest Score</span>
+                    <strong class="progress-callout-value" id="progress-highlight-value">—</strong>
+                    <span class="progress-callout-trend" id="progress-latest-trend">First recorded value</span>
+                </span>
+            </aside>
         </div>
         <div class="progress-controls">
             <label>Exercise
@@ -58,19 +81,27 @@
                 </select>
             </label>
         </div>
-        <div class="progress-chart-wrap">
-            <p class="progress-status" id="progress-status" role="status">Loading progression history...</p>
-            <div class="progress-summary" id="progress-summary" hidden>
-                <div class="progress-summary-card"><span class="progress-summary-label">Latest</span><span class="progress-summary-value" id="progress-latest">—</span></div>
-                <div class="progress-summary-card"><span class="progress-summary-label">Previous</span><span class="progress-summary-value" id="progress-previous">—</span></div>
-                <div class="progress-summary-card"><span class="progress-summary-label">Change</span><span class="progress-summary-value" id="progress-change">—</span></div>
+        <p class="progress-status" id="progress-status" role="status">Loading progression history...</p>
+        <div class="progress-summary" id="progress-summary" hidden>
+            <div class="progress-summary-card">
+                <span class="progress-summary-label">Latest</span>
+                <span class="progress-summary-value" id="progress-latest">—</span>
             </div>
-            <svg class="progress-chart" id="patient-progress-chart" viewBox="0 0 800 390" role="img" aria-label="Patient progression chart"></svg>
+            <div class="progress-summary-card">
+                <span class="progress-summary-label">Previous</span>
+                <span class="progress-summary-value" id="progress-previous">—</span>
+            </div>
+            <div class="progress-summary-card">
+                <span class="progress-summary-label">Change</span>
+                <span class="progress-summary-value" id="progress-change">—</span>
+            </div>
+        </div>
+        <div class="progress-chart-wrap">
+            <svg class="progress-chart" id="patient-progress-chart" viewBox="0 0 1000 430" role="img" aria-label="Patient progression chart"></svg>
             <div class="progress-tooltip" id="progress-tooltip" role="status"></div>
             <div class="progress-empty" id="progress-empty" hidden></div>
         </div>
     </section>
-
     <section class="card" aria-labelledby="recent-sessions-title">
         <div class="panel-header">
             <h2 id="recent-sessions-title">Recent Sessions</h2>
