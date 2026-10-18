@@ -336,6 +336,58 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_feed").status_code, 404)
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
+    def test_destructive_actions_require_explicit_clinician_delete_capabilities(self):
+        record = AssessmentRecord(
+            assessment_id=1,
+            patient_id=1,
+            exercise="Left Bicep Curl",
+            repetitions=1,
+            average_score=50.0,
+            best_score=60.0,
+            worst_score=40.0,
+            feedback="[]",
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        for email, role in (
+            ("patient@example.test", "PATIENT"),
+            ("admin@example.test", "ADMIN"),
+            ("operator@example.test", "OPERATOR"),
+        ):
+            with self.subTest(email=email):
+                self._login(email, role)
+                headers = {"X-CSRF-Token": self._csrf()}
+                assessment_response = self.client.post(
+                    "/assessment/1/delete",
+                    headers=headers,
+                )
+                patient_response = self.client.post(
+                    "/patients/2/delete",
+                    headers=headers,
+                )
+                self.assertEqual(assessment_response.status_code, 403)
+                self.assertEqual(patient_response.status_code, 403)
+                self.assertIsNotNone(db.session.get(AssessmentRecord, 1))
+                self.assertIsNotNone(db.session.get(Patient, 2))
+                self.client.post("/logout", data={"csrf_token": self._csrf()})
+
+        self._login("clinician@example.test", "CLINICIAN")
+        clinician_headers = {"X-CSRF-Token": self._csrf()}
+        deleted_assessment = self.client.post(
+            "/assessment/1/delete",
+            headers=clinician_headers,
+        )
+        self.assertEqual(deleted_assessment.status_code, 302)
+        self.assertIsNone(db.session.get(AssessmentRecord, 1))
+
+        deleted_patient = self.client.post(
+            "/patients/2/delete",
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(deleted_patient.status_code, 302)
+        self.assertIsNone(db.session.get(Patient, 2))
+
     def test_clinician_patient_profile_alias_reaches_protected_profile(self):
         self._login("clinician@example.test", "CLINICIAN")
         response = self.client.get(

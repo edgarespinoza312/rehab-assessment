@@ -1420,9 +1420,10 @@ def delete_assessment(assessment_id):
 
     assessment = AssessmentRecord.query.get_or_404(assessment_id)
     patient_id = assessment.patient_id
-    if not _current_user_can_access_patient(
+    if not authorize_patient_access(
+        current_identity(),
+        Capability.DELETE_ASSESSMENT_RECORD,
         patient_id,
-        Capability.VIEW_ASSIGNED_PATIENT,
     ):
         return jsonify({"error": "forbidden"}), 403
 
@@ -1437,7 +1438,7 @@ def delete_assessment(assessment_id):
     )
 
 @app.route("/patients/<int:patient_id>/delete", methods=["POST"])
-@require_capability(Capability.VIEW_ASSIGNED_PATIENT)
+@require_capability(Capability.DELETE_PATIENT_RECORD)
 def delete_patient(patient_id):
     require_csrf()
 

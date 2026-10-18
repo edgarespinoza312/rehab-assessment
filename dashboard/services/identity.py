@@ -34,6 +34,8 @@ class Capability(str, Enum):
     MANAGE_ACCOUNTS = "MANAGE_ACCOUNTS"
     CREATE_WORKOUT_PLAN = "CREATE_WORKOUT_PLAN"
     ACCESS_ASSESSMENT_SETUP = "ACCESS_ASSESSMENT_SETUP"
+    DELETE_PATIENT_RECORD = "DELETE_PATIENT_RECORD"
+    DELETE_ASSESSMENT_RECORD = "DELETE_ASSESSMENT_RECORD"
 
 
 @dataclass(frozen=True)
@@ -143,6 +145,12 @@ class AuthorizationService:
 
         if capability == Capability.MANAGE_ACCOUNTS:
             return ApplicationRole.ADMIN in identity.roles
+
+        if capability in {
+            Capability.DELETE_PATIENT_RECORD,
+            Capability.DELETE_ASSESSMENT_RECORD,
+        }:
+            return clinician_role and patient_id is not None
 
         if capability in {
             Capability.VIEW_ASSIGNED_PATIENT,

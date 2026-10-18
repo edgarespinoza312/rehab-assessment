@@ -119,6 +119,51 @@ class IdentityArchitectureTests(unittest.TestCase):
             patient_id=8,
         ))
         self.assertFalse(can(operator, Capability.ACCESS_ASSESSMENT_SETUP))
+        self.assertTrue(can(
+            clinician,
+            Capability.DELETE_PATIENT_RECORD,
+            patient_id=8,
+        ))
+        self.assertTrue(can(
+            clinician,
+            Capability.DELETE_ASSESSMENT_RECORD,
+            patient_id=8,
+        ))
+        self.assertFalse(can(clinician, Capability.DELETE_PATIENT_RECORD))
+        self.assertFalse(can(
+            patient,
+            Capability.DELETE_PATIENT_RECORD,
+            patient_id=7,
+        ))
+        self.assertFalse(can(
+            patient,
+            Capability.DELETE_ASSESSMENT_RECORD,
+            patient_id=7,
+        ))
+        self.assertFalse(can(
+            operator,
+            Capability.DELETE_PATIENT_RECORD,
+            patient_id=8,
+        ))
+        self.assertFalse(can(
+            operator,
+            Capability.DELETE_ASSESSMENT_RECORD,
+            patient_id=8,
+        ))
+        admin = trusted_development_identity(
+            5,
+            roles={ApplicationRole.ADMIN},
+        )
+        self.assertFalse(can(
+            admin,
+            Capability.DELETE_PATIENT_RECORD,
+            patient_id=8,
+        ))
+        self.assertFalse(can(
+            admin,
+            Capability.DELETE_ASSESSMENT_RECORD,
+            patient_id=8,
+        ))
         disabled = IdentityContext(
             user_id=4,
             roles=frozenset({ApplicationRole.CLINICIAN}),
