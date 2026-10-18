@@ -12,7 +12,7 @@ from dashboard.app import (
     _release_runtime_context,
 )
 from dashboard.database import db
-from dashboard.models import AssessmentRecord, Patient, Role, User
+from dashboard.models import AssessmentRecord, Patient, Role, User, WorkoutPlan
 from dashboard.runtime_context import RuntimeLifecycle
 from core.models import AssessmentResult
 from dashboard.services.authentication import RUNTIME_SESSION_KEY, hash_password
@@ -84,6 +84,34 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertEqual(response.get_json(), {"error": "camera unavailable"})
         self.assertFalse(video_consumer_guard.active)
         self.assertEqual(client.get("/patient").status_code, 200)
+
+    def test_workout_api_rejects_excessive_repetition_target(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        with client.session_transaction() as state:
+            csrf = state["revaliv_csrf_token"]
+
+        response = client.post(
+            "/workout/plans",
+            json={
+                "name": "Excessive reps",
+                "description": "",
+                "patient_id": 1,
+                "exercises": [{
+                    "position": 0,
+                    "exercise_id": "bicep_curl",
+                    "side": "left",
+                    "target_repetitions": 1001,
+                    "resistance_value": None,
+                    "resistance_unit": None,
+                    "resistance_type": None,
+                }],
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("target_repetitions", response.get_json()["error"])
+        self.assertEqual(WorkoutPlan.query.count(), 0)
 
     def test_assessment_save_rejects_concurrent_duplicate_submission(self):
         client = app.test_client()
