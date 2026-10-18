@@ -2031,6 +2031,8 @@ def save_assessment():
     if context is None:
         return redirect(url_for("selection"))
     with context.lock:
+        if context.save_in_progress:
+            return jsonify({"error": "assessment save already in progress"}), 409
         if context.session is None or context.completed_session is None:
             return redirect(url_for("selection"))
         patient_access_error = _require_runtime_patient_access(
@@ -2039,11 +2041,10 @@ def save_assessment():
         if patient_access_error is not None:
             return patient_access_error
         source_session = context.session
-        source_patient_id = context.session.patient_id
         source_snapshot = context.completed_session
         snapshot = dict(context.completed_session)
         snapshot["feedback"] = list(context.completed_session.get("feedback", []))
-
+        context.save_in_progress = True
 
     record = AssessmentRecord(
         patient_id=snapshot["patient_id"],
@@ -2057,8 +2058,14 @@ def save_assessment():
         notes="",
     )
 
-    db.session.add(record)
-    db.session.commit()
+    try:
+        db.session.add(record)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        with context.lock:
+            context.save_in_progress = False
+        raise
 
     patient_id = snapshot["patient_id"]
     with context.lock:
@@ -2068,6 +2075,7 @@ def save_assessment():
             context.completed_session = None
             context.runtime_mode = RuntimeMode.LEGACY_ASSESSMENT.value
             _sync_compatibility_context(context)
+        context.save_in_progress = False
 
     if any(
         role.value == "PATIENT" for role in current_identity().roles
