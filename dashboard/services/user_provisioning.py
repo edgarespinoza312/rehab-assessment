@@ -35,7 +35,7 @@ def create_user(*, display_name, email, password, role, patient_id=None):
             f"display_name must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
         )
     normalized_email = normalize_email(email)
-    if role not in VALID_ROLES:
+    if not isinstance(role, str) or role not in VALID_ROLES:
         raise ValueError(f"invalid role: {role}")
     if User.query.filter_by(email=normalized_email).first() is not None:
         raise ValueError("email is already in use")
