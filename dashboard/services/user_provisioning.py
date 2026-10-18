@@ -25,6 +25,15 @@ def _role(name: str) -> Role:
     return role
 
 
+def _commit_with_rollback() -> None:
+    """Commit service changes or clear the failed transaction before re-raising."""
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+
 def create_user(*, display_name, email, password, role, patient_id=None):
     """Create an active user; callers must be trusted server-side code."""
     if not isinstance(display_name, str) or not display_name.strip():
@@ -111,7 +120,7 @@ def disable_user(user_id: int):
     if user is None:
         raise ValueError("user does not exist")
     user.status = "DISABLED"
-    db.session.commit()
+    _commit_with_rollback()
     return user
 
 
@@ -122,7 +131,7 @@ def assign_role(user_id: int, role: str):
     role_obj = _role(role)
     if role_obj not in user.roles:
         user.roles.append(role_obj)
-        db.session.commit()
+        _commit_with_rollback()
     return user
 
 
@@ -138,7 +147,7 @@ def link_patient(user_id: int, patient_id: int):
     if linked is not None:
         raise ValueError("patient is already linked")
     user.patient = patient
-    db.session.commit()
+    _commit_with_rollback()
     return user
 
 
@@ -147,5 +156,5 @@ def unlink_patient(user_id: int):
     if user is None:
         raise ValueError("user does not exist")
     user.patient = None
-    db.session.commit()
+    _commit_with_rollback()
     return user
