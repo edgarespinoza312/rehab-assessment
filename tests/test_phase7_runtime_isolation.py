@@ -279,6 +279,53 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIsNone(context.session)
         self.assertIsNone(context.completed_session)
 
+    def test_deleting_patient_releases_clinician_workout_runtime(self):
+        create_user(
+            display_name="Workout Clinician",
+            email="workout-clinician@example.test",
+            password="password-clinician",
+            role="CLINICIAN",
+        )
+        client = app.test_client()
+        self._login(
+            client,
+            "workout-clinician@example.test",
+            "password-clinician",
+            role="CLINICIAN",
+        )
+        with client.session_transaction() as state:
+            csrf = state["revaliv_csrf_token"]
+
+        started = client.post(
+            "/workout/start",
+            json={
+                "preset_id": "bilateral_bicep_curl_2",
+                "patient_id": 1,
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(started.status_code, 201)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        self.assertIsNone(context.patient_id)
+        self.assertEqual(context.workout_runtime.snapshot().patient_id, 1)
+
+        with patch.object(context.pose, "close") as close_pose:
+            response = client.post(
+                "/patients/1/delete",
+                data={"csrf_token": csrf},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(db.session.get(Patient, 1))
+        self.assertEqual(close_pose.call_count, 1)
+        self.assertIsNone(runtime_registry.get(runtime_id))
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.EXPIRED)
+        self.assertIsNone(context.workout_runtime)
+
     def test_disabled_user_cannot_continue_runtime(self):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
