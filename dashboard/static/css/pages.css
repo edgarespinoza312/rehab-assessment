@@ -2387,3 +2387,372 @@
     }
 
 }
+
+/* ==========================================================
+   Patient progression chart — scoped visual refresh
+   Only the Progress Over Time panel is affected.
+========================================================== */
+
+.patient-progress-chart-card {
+    overflow: hidden;
+    border-color: #2b3b53;
+    background: linear-gradient(145deg, #1d293b 0%, #182438 100%);
+    box-shadow: 0 16px 40px rgba(2, 8, 20, .16);
+}
+
+.patient-progress-chart-card .progress-chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.patient-progress-chart-card .progress-chart-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    min-width: 0;
+}
+
+.patient-progress-chart-card .progress-chart-icon {
+    display: grid;
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    border: 1px solid rgba(76, 139, 255, .22);
+    border-radius: 15px;
+    background: linear-gradient(145deg, rgba(59, 130, 246, .23), rgba(59, 130, 246, .08));
+    color: #60a5fa;
+}
+
+.patient-progress-chart-card .progress-chart-icon svg {
+    width: 30px;
+    height: 30px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.2;
+}
+
+.patient-progress-chart-card .progress-chart-heading .panel-header {
+    min-width: 0;
+    margin: 2px 0 0;
+}
+
+.patient-progress-chart-card #progress-chart-title {
+    margin: 0 0 6px;
+    color: #f4f7fc;
+    font-size: clamp(1.2rem, 2vw, 1.55rem);
+    font-weight: 700;
+    letter-spacing: -.025em;
+}
+
+.patient-progress-chart-card .progress-chart-heading .panel-subtitle {
+    max-width: 720px;
+    margin: 0;
+    color: #aab9ce;
+    font-size: .91rem;
+    line-height: 1.5;
+}
+
+.patient-progress-chart-card .progress-latest-callout {
+    display: flex;
+    flex: 0 0 204px;
+    align-items: center;
+    gap: 13px;
+    min-width: 204px;
+    padding: 15px 16px;
+    border: 1px solid #344760;
+    border-radius: 15px;
+    background: linear-gradient(145deg, rgba(34, 49, 70, .94), rgba(25, 38, 57, .94));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.patient-progress-chart-card .progress-latest-callout[hidden] {
+    display: none;
+}
+
+.patient-progress-chart-card .progress-callout-icon {
+    display: grid;
+    flex: 0 0 35px;
+    width: 35px;
+    height: 35px;
+    place-items: center;
+    color: #60a5fa;
+}
+
+.patient-progress-chart-card .progress-callout-icon svg {
+    width: 32px;
+    height: 32px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.patient-progress-chart-card .progress-callout-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.patient-progress-chart-card .progress-callout-label {
+    color: #aab9ce;
+    font-size: .77rem;
+    font-weight: 550;
+}
+
+.patient-progress-chart-card .progress-callout-value {
+    color: #f4f8ff;
+    font-size: 1.55rem;
+    font-weight: 750;
+    letter-spacing: -.025em;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+}
+
+.patient-progress-chart-card .progress-callout-trend {
+    color: #9eafc6;
+    font-size: .73rem;
+    line-height: 1.35;
+}
+
+.patient-progress-chart-card .progress-callout-trend.is-positive,
+.patient-progress-chart-card .progress-summary-value.is-positive {
+    color: #55d6a2;
+}
+
+.patient-progress-chart-card .progress-callout-trend.is-negative,
+.patient-progress-chart-card .progress-summary-value.is-negative {
+    color: #ff777d;
+}
+
+.patient-progress-chart-card .progress-callout-trend.is-neutral,
+.patient-progress-chart-card .progress-summary-value.is-neutral {
+    color: #aab9ce;
+}
+
+.patient-progress-chart-card .progress-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 20px;
+    margin-bottom: 16px;
+}
+
+.patient-progress-chart-card .progress-controls label {
+    display: grid;
+    flex: 0 1 200px;
+    gap: 7px;
+    color: #aab9ce;
+    font-size: .82rem;
+    font-weight: 550;
+}
+
+.patient-progress-chart-card .progress-controls select {
+    width: 100%;
+    min-width: 160px;
+    min-height: 42px;
+    padding: 9px 36px 9px 12px;
+    border: 1px solid #394d68;
+    border-radius: 9px;
+    background-color: #111c2e;
+    color: #edf4ff;
+    font: inherit;
+    font-size: .85rem;
+    transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.patient-progress-chart-card .progress-controls select:focus-visible {
+    border-color: #60a5fa;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, .18);
+}
+
+.patient-progress-chart-card .progress-status {
+    margin: 0 0 12px;
+    color: #9fb3cb;
+    font-size: .84rem;
+}
+
+.patient-progress-chart-card .progress-status.error {
+    color: #ff9b9f;
+}
+
+.patient-progress-chart-card .progress-summary {
+    display: grid;
+    gap: 5px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 0 18px;
+}
+
+.patient-progress-chart-card .progress-summary[hidden] {
+    display: none;
+}
+
+.patient-progress-chart-card .progress-summary-card {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+}
+
+.patient-progress-chart-card .progress-summary-label {
+    min-width: 76px;
+    color: #aab9ce;
+    font-size: .85rem;
+}
+
+.patient-progress-chart-card .progress-summary-value {
+    color: #edf4ff;
+    font-size: .9rem;
+    font-weight: 700;
+}
+
+.patient-progress-chart-card .progress-chart-wrap {
+    position: relative;
+    min-width: 0;
+    padding: 12px 10px 3px;
+    overflow-x: auto;
+    border: 1px solid #2b3d56;
+    border-radius: 14px;
+    background: linear-gradient(155deg, rgba(12, 21, 37, .78), rgba(19, 31, 50, .76));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.patient-progress-chart-card .progress-chart {
+    display: block;
+    width: 100%;
+    min-width: 620px;
+    height: auto;
+    overflow: visible;
+    font-family: inherit;
+}
+
+.patient-progress-chart-card .chart-gridline {
+    stroke: rgba(139, 162, 193, .25);
+    stroke-width: 1;
+    stroke-dasharray: 5 7;
+    vector-effect: non-scaling-stroke;
+}
+
+.patient-progress-chart-card .chart-gridline-vertical {
+    stroke: rgba(139, 162, 193, .18);
+    stroke-dasharray: 5 7;
+}
+
+.patient-progress-chart-card .chart-axis {
+    stroke: #52657f;
+    stroke-width: 1.15;
+    vector-effect: non-scaling-stroke;
+}
+
+.patient-progress-chart-card .chart-label {
+    fill: #aab9ce;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.patient-progress-chart-card .chart-axis-title {
+    fill: #aab9ce;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 550;
+}
+
+.patient-progress-chart-card .progress-area {
+    fill: url(#progress-area-gradient);
+}
+
+.patient-progress-chart-card .progress-line {
+    fill: none;
+    stroke: #3b82f6;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: url(#progress-line-glow);
+    vector-effect: non-scaling-stroke;
+}
+
+.patient-progress-chart-card .progress-point {
+    fill: #3b82f6;
+    stroke: #f3f7ff;
+    stroke-width: 2.6;
+    cursor: pointer;
+    transition: r .15s ease, stroke-width .15s ease, fill .15s ease;
+    vector-effect: non-scaling-stroke;
+}
+
+.patient-progress-chart-card .progress-point.workout-point {
+    fill: #8b5cf6;
+}
+
+.patient-progress-chart-card .progress-point:hover,
+.patient-progress-chart-card .progress-point:focus-visible {
+    r: 9;
+    stroke-width: 3.2;
+    outline: none;
+}
+
+.patient-progress-chart-card .progress-tooltip {
+    position: absolute;
+    z-index: 5;
+    display: none;
+    max-width: min(260px, calc(100% - 20px));
+    padding: 10px 12px;
+    border: 1px solid #405674;
+    border-radius: 9px;
+    background: #0b1525;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .3);
+    color: #edf4ff;
+    font-size: .78rem;
+    line-height: 1.55;
+    white-space: pre-line;
+    pointer-events: none;
+}
+
+.patient-progress-chart-card .progress-empty {
+    padding: 30px 16px;
+    color: #aab9ce;
+    font-size: .9rem;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.patient-progress-chart-card .progress-empty[hidden] {
+    display: none;
+}
+
+@media (max-width: 760px) {
+    .patient-progress-chart-card .progress-chart-header {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .patient-progress-chart-card .progress-latest-callout {
+        flex-basis: auto;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .patient-progress-chart-card .progress-controls label {
+        flex: 1 1 170px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .patient-progress-chart-card .progress-controls select,
+    .patient-progress-chart-card .progress-point {
+        transition: none;
+    }
+}
