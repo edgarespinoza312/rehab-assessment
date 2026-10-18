@@ -163,6 +163,10 @@ class ProgressionContextTests(unittest.TestCase):
         )
         self.assertEqual(legacy.source_type, "legacy_assessment")
 
+    def test_recent_limit_is_bounded(self):
+        with self.assertRaisesRegex(ValueError, "must not exceed 100"):
+            get_patient_progression_context(1, recent_limit=101)
+
     def test_side_multiple_exercises_units_and_order_are_preserved(self):
         self._add_session(
             "context-multi",
