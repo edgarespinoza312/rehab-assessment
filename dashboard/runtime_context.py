@@ -40,6 +40,7 @@ class RuntimeContext:
     lifecycle: RuntimeLifecycle = RuntimeLifecycle.CREATED
     session: AssessmentSession | None = None
     completed_session: dict | None = None
+    save_in_progress: bool = False
     workout_runtime: WorkoutRuntimeAdapter | None = None
     pose: object = field(default_factory=create_perception_backend)
     biomechanics: BiomechanicsEngine = field(default_factory=BiomechanicsEngine)
