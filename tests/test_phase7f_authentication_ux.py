@@ -5,7 +5,11 @@ from dashboard.app import app
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.services.authentication import hash_password
-from dashboard.services.user_provisioning import create_user, link_patient
+from dashboard.services.user_provisioning import (
+    create_patient_account,
+    create_user,
+    link_patient,
+)
 
 
 class Phase7FAuthenticationTests(unittest.TestCase):
@@ -164,6 +168,30 @@ class Phase7FAuthenticationTests(unittest.TestCase):
                         role=role,
                     )
                 self.assertIsNone(User.query.filter_by(email=email).first())
+
+    def test_patient_registration_rolls_back_when_initial_flush_fails(self):
+        initial_patient_count = Patient.query.count()
+        with patch.object(
+            db.session,
+            "flush",
+            side_effect=RuntimeError("flush failed"),
+        ), patch.object(
+            db.session,
+            "rollback",
+            wraps=db.session.rollback,
+        ) as rollback:
+            with self.assertRaisesRegex(RuntimeError, "flush failed"):
+                create_patient_account(
+                    display_name="Flush Failure",
+                    email="flush-failure@example.test",
+                    password="safe password",
+                )
+            rollback.assert_called_once()
+
+        self.assertEqual(Patient.query.count(), initial_patient_count)
+        self.assertIsNone(
+            User.query.filter_by(email="flush-failure@example.test").first()
+        )
 
     def test_patient_link_change_rolls_back_when_commit_fails(self):
         user = User.query.filter_by(email="clinician@example.test").one()
