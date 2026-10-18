@@ -232,7 +232,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         )
         with patch.object(context.pose, "close") as close_pose:
             response = admin_client.post(
-                f"/admin/accounts/{admin_user.user_id}/disable",
+                f"/admin/accounts/{self.a.user_id}/disable",
                 data={"csrf_token": self._csrf_for(admin_client)},
             )
 
