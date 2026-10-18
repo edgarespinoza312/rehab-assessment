@@ -75,6 +75,17 @@ class WorkoutPersistenceTests(unittest.TestCase):
         self.assertEqual(loaded.exercises[0].resistance_unit, "lb")
         self.assertIsNone(loaded.exercises[1].resistance_value)
 
+    def test_unknown_exercise_id_is_rejected_without_partial_records(self):
+        with self.assertRaisesRegex(ValueError, "unknown exercise identifier"):
+            create_workout_plan(
+                "Invalid exercise",
+                (WorkoutPrescription("unknown_exercise", "left", 4),),
+                patient_id=self.patient.patient_id,
+            )
+
+        self.assertEqual(WorkoutPlan.query.count(), 0)
+        self.assertEqual(ExerciseIdentity.query.count(), 0)
+
     def test_patient_scoped_loading_allows_shared_or_matching_plan_only(self):
         patient_plan = create_workout_plan(
             "Patient curls",
