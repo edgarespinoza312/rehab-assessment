@@ -1,5 +1,6 @@
 from datetime import datetime
 import unittest
+from unittest.mock import patch
 
 from dashboard.app import app
 from dashboard.database import db
@@ -140,6 +141,27 @@ class ProgressionReviewServiceTests(unittest.TestCase):
                         disposition=disposition,
                     )
         self.assertEqual(db.session.query(ProgressionReviewEvent).count(), 0)
+
+    def test_commit_failure_rolls_back_review_event(self):
+        decision = self._decision()
+        with patch.object(
+            db.session,
+            "commit",
+            side_effect=RuntimeError("commit failed"),
+        ), patch.object(
+            db.session,
+            "rollback",
+            wraps=db.session.rollback,
+        ) as rollback:
+            with self.assertRaisesRegex(RuntimeError, "commit failed"):
+                create_review_event(
+                    decision,
+                    reviewer_reference="reviewer",
+                    disposition="REVIEWED",
+                )
+            rollback.assert_called_once()
+
+        self.assertEqual(ProgressionReviewEvent.query.count(), 0)
 
     def test_validation_and_no_evidence_guard(self):
         with self.assertRaises(ValueError):
