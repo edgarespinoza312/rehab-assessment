@@ -188,6 +188,58 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         get_frame.assert_called_once()
         process_pose.assert_not_called()
 
+    def test_discarding_active_legacy_assessment_marks_runtime_cancelled(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+            csrf = state["revaliv_csrf_token"]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        context.session_manager.add_result(
+            __import__("core.models", fromlist=["AssessmentResult"]).AssessmentResult(
+                overall_score=75,
+            )
+        )
+
+        response = client.post("/discard", data={"csrf_token": csrf})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.CANCELLED)
+        self.assertIsNone(context.session)
+        self.assertIsNone(context.completed_session)
+        self.assertEqual(context.session_manager.repetition_count, 0)
+        self.assertEqual(client.get("/video_feed").status_code, 404)
+
+    def test_discard_route_cannot_clobber_active_workout(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        with client.session_transaction() as state:
+            csrf = state["revaliv_csrf_token"]
+            runtime_id = state[RUNTIME_SESSION_KEY] if RUNTIME_SESSION_KEY in state else None
+        started = client.post(
+            "/workout/start",
+            json={
+                "preset_id": "bilateral_bicep_curl_2",
+                "patient_id": 1,
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(started.status_code, 201)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+            csrf = state["revaliv_csrf_token"]
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        self.assertTrue(context.workout_runtime.active)
+
+        response = client.post("/discard", data={"csrf_token": csrf})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(context.runtime_mode, "workout_session")
+        self.assertTrue(context.workout_runtime.active)
+
     def test_workout_cancellation_does_not_change_other_runtime(self):
         client_a = app.test_client()
         client_b = app.test_client()

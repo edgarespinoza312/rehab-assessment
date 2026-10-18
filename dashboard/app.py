@@ -2771,8 +2771,25 @@ def discard_assessment():
     context = runtime_context_for_request(create=False)
     if context is not None:
         with context.lock:
+            if (
+                context.runtime_mode == RuntimeMode.WORKOUT_SESSION.value
+                and context.workout_runtime is not None
+                and context.workout_runtime.active
+            ):
+                return jsonify({
+                    "error": "cancel the active workout through /workout/cancel"
+                }), 409
+
+            if context.lifecycle is RuntimeLifecycle.ACTIVE:
+                context.transition(RuntimeLifecycle.CANCELLED)
             context.session = None
             context.completed_session = None
+            context.session_manager.clear()
+            context.display_pose_continuity.clear()
+            context.biomechanics.reset_rep_metrics()
+            context.exercise.state = ExerciseState()
+            context.pose.reset_calibration()
+            context.workout_runtime = None
             context.runtime_mode = RuntimeMode.LEGACY_ASSESSMENT.value
             _sync_compatibility_context(context)
 
