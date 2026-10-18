@@ -151,6 +151,19 @@ class Phase7FAuthenticationTests(unittest.TestCase):
         self.assertEqual(Patient.query.count(), initial_patient_count)
         self.assertEqual(User.query.count(), initial_user_count)
 
+    def test_user_creation_rejects_non_string_role_values(self):
+        for index, role in enumerate(([], {}, None, 7)):
+            email = f"invalid-role-{index}@example.test"
+            with self.subTest(role=role):
+                with self.assertRaisesRegex(ValueError, "invalid role"):
+                    create_user(
+                        display_name="Invalid Role",
+                        email=email,
+                        password="safe password",
+                        role=role,
+                    )
+                self.assertIsNone(User.query.filter_by(email=email).first())
+
     def test_failed_user_creation_does_not_leave_a_new_role(self):
         patient_role = Role.query.filter_by(name="PATIENT").one()
         db.session.delete(patient_role)
