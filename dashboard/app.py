@@ -415,6 +415,20 @@ def _active_runtime_patient_id(context) -> int | None:
         return context.session.patient_id
     return None
 
+def _has_active_runtime_session(context) -> bool:
+    """Check active session state without imposing route-level patient linkage."""
+    if context.runtime_mode == RuntimeMode.WORKOUT_SESSION.value:
+        return (
+            context.workout_runtime is not None
+            and context.workout_runtime.active
+        )
+    return (
+        context.runtime_mode == RuntimeMode.LEGACY_ASSESSMENT.value
+        and context.session is not None
+        and context.completed_session is None
+    )
+
+
 def _release_runtime_context(runtime_id: str | None) -> None:
     """Expire and release one runtime, including its pose backend resources."""
     context = runtime_registry.get(runtime_id)
@@ -2414,7 +2428,7 @@ def _generate_frames(context=None):
                 RuntimeLifecycle.COMPLETED,
                 RuntimeLifecycle.CANCELLED,
                 RuntimeLifecycle.EXPIRED,
-            } or _active_runtime_patient_id(context) is None:
+            } or not _has_active_runtime_session(context):
                 return
             session = context.session
             workout_runtime = context.workout_runtime
@@ -2483,7 +2497,7 @@ def _generate_frames(context=None):
                         RuntimeLifecycle.CANCELLED,
                         RuntimeLifecycle.EXPIRED,
                     }
-                    or _active_runtime_patient_id(context) is None
+                    or not _has_active_runtime_session(context)
                 ):
                     return
                 session = context.session
