@@ -673,7 +673,9 @@ def clinician_patient_profile(patient_id):
     identity = current_identity()
     if not any(role.value == "CLINICIAN" for role in identity.roles):
         return jsonify({"error": "forbidden"}), 403
-    return patient_profile(patient_id)
+    # Go through the canonical protected route so its capability decorator
+    # receives patient_id as a route keyword rather than a positional arg.
+    return redirect(url_for("patient_profile", patient_id=patient_id))
 
 
 @app.route(

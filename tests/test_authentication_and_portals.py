@@ -219,6 +219,16 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 403)
         self.assertEqual(self.client.get("/api/patients/1/progression").status_code, 403)
 
+    def test_clinician_patient_profile_alias_reaches_protected_profile(self):
+        self._login("clinician@example.test", "CLINICIAN")
+        response = self.client.get(
+            "/clinician/patients/1",
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Pat", response.get_data(as_text=True))
+        self.assertIn("User", response.get_data(as_text=True))
+
     def test_clinician_can_build_and_create_patient_workout_plan(self):
         self._login("clinician@example.test", "CLINICIAN")
         self.assertEqual(self.client.get("/workout/builder?patient_id=1").status_code, 200)
