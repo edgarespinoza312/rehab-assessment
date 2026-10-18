@@ -297,8 +297,10 @@ def get_patient_progression_context(
     """
     if isinstance(recent_limit, bool) or not isinstance(recent_limit, int):
         raise ValueError("recent_limit must be an integer")
+    if isinstance(recent_limit, bool) or not isinstance(recent_limit, int):
+        raise ValueError("recent_limit must be a positive integer")
     if recent_limit <= 0:
-        raise ValueError("recent_limit must be positive")
+        raise ValueError("recent_limit must be a positive integer")
     if recent_limit > MAX_RECENT_PROGRESSION_LIMIT:
         raise ValueError(
             f"recent_limit must not exceed {MAX_RECENT_PROGRESSION_LIMIT}"
