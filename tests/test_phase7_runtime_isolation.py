@@ -243,6 +243,42 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIsNone(context.session)
         self.assertIsNone(context.completed_session)
 
+    def test_deleting_patient_immediately_releases_patient_runtime(self):
+        create_user(
+            display_name="Clinician",
+            email="clinician@example.test",
+            password="password-clinician",
+            role="CLINICIAN",
+        )
+        patient_client = app.test_client()
+        self._login(patient_client, "a@example.test", "password-a")
+        self._start_assessment(patient_client, 1)
+        with patient_client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        clinician_client = app.test_client()
+        self._login(
+            clinician_client,
+            "clinician@example.test",
+            "password-clinician",
+            role="CLINICIAN",
+        )
+        with patch.object(context.pose, "close") as close_pose:
+            response = clinician_client.post(
+                "/patients/1/delete",
+                data={"csrf_token": self._csrf_for(clinician_client)},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(db.session.get(Patient, 1))
+        self.assertEqual(close_pose.call_count, 1)
+        self.assertIsNone(runtime_registry.get(runtime_id))
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.EXPIRED)
+        self.assertIsNone(context.session)
+        self.assertIsNone(context.completed_session)
+
     def test_disabled_user_cannot_continue_runtime(self):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
