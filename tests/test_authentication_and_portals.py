@@ -66,6 +66,20 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         return response
 
+    def test_missing_csrf_secret_rejects_empty_token(self):
+        self._login("patient@example.test", "PATIENT")
+        with self.client.session_transaction() as session:
+            session.pop("revaliv_csrf_token", None)
+
+        response = self.client.post(
+            "/logout",
+            headers={"X-CSRF-Token": ""},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        # Failed CSRF validation must not perform the state-changing action.
+        self.assertEqual(self.client.get("/patient").status_code, 200)
+
     def test_login_role_selection_cannot_elevate(self):
         token = self._csrf()
         response = self.client.post("/login", data={

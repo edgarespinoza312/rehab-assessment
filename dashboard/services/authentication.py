@@ -91,9 +91,12 @@ def valid_csrf_token() -> bool:
         "X-CSRF-Token"
     )
     expected = session.get(CSRF_SESSION_KEY)
-    return isinstance(supplied, str) and secrets.compare_digest(
-        supplied,
-        expected if isinstance(expected, str) else "",
+    return (
+        isinstance(supplied, str)
+        and bool(supplied)
+        and isinstance(expected, str)
+        and bool(expected)
+        and secrets.compare_digest(supplied, expected)
     )
 
 
