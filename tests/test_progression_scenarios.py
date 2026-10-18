@@ -132,10 +132,14 @@ class ProgressionScenarioTests(unittest.TestCase):
 
     def test_registry_construction_does_not_write_configured_database(self):
         database = Path("dashboard/neuromotion.db")
-        before = database.read_bytes()
+        existed_before = database.exists()
+        before = database.read_bytes() if existed_before else None
+
         _ = tuple(SCENARIOS.values())
-        after = database.read_bytes()
-        self.assertEqual(before, after)
+
+        self.assertEqual(database.exists(), existed_before)
+        if existed_before:
+            self.assertEqual(database.read_bytes(), before)
 
 
 
