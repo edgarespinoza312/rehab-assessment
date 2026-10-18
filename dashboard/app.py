@@ -1914,6 +1914,8 @@ def finish_assessment():
     if context is None:
         return redirect(url_for("selection"))
     with context.lock:
+        if context.save_in_progress:
+            return jsonify({"error": "assessment save already in progress"}), 409
         session = context.session
         session_manager = context.session_manager
         runtime_patient_id = (
@@ -2904,6 +2906,8 @@ def discard_assessment():
     context = runtime_context_for_request(create=False)
     if context is not None:
         with context.lock:
+            if context.save_in_progress:
+                return jsonify({"error": "assessment save already in progress"}), 409
             if (
                 context.runtime_mode == RuntimeMode.WORKOUT_SESSION.value
                 and context.workout_runtime is not None
