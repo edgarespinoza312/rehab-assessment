@@ -2,6 +2,7 @@
     const definitions = JSON.parse(
         document.getElementById("builder-exercise-data").textContent,
     );
+    const MAX_WORKOUT_PLAN_EXERCISES = 50;
     const list = document.getElementById("builder-exercise-list");
     const emptyMessage = document.getElementById("builder-empty-message");
     const choice = document.getElementById("builder-exercise-choice");
@@ -235,6 +236,10 @@
     function addExercise() {
         const definition = definitions.find(item => item.id === choice.value);
         if (!definition) return;
+        if (list.children.length >= MAX_WORKOUT_PLAN_EXERCISES) {
+            message.textContent = `A workout can contain at most ${MAX_WORKOUT_PLAN_EXERCISES} exercises.`;
+            return;
+        }
 
         const card = document.createElement("li");
         card.className = "builder-exercise-card";
