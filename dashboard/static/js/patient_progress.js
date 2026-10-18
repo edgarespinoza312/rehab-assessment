@@ -8,6 +8,10 @@
     const latestValue = document.getElementById("progress-latest");
     const previousValue = document.getElementById("progress-previous");
     const changeValue = document.getElementById("progress-change");
+    const latestCallout = document.getElementById("progress-latest-callout");
+    const latestLabel = document.getElementById("progress-latest-label");
+    const highlightedValue = document.getElementById("progress-highlight-value");
+    const latestTrend = document.getElementById("progress-latest-trend");
     const exerciseSelector = document.getElementById("progress-exercise");
     const sideSelector = document.getElementById("progress-side");
     const metricSelector = document.getElementById("progress-metric");
@@ -34,6 +38,7 @@
     if (
         !configElement || !chart || !tooltip || !emptyMessage || !status ||
         !summary || !latestValue || !previousValue || !changeValue ||
+        !latestCallout || !latestLabel || !highlightedValue || !latestTrend ||
         !exerciseSelector || !sideSelector || !metricSelector ||
         !advisoryStatus || !advisoryContent || !advisoryEmpty ||
         !advisoryExercise || !advisorySide || !advisoryCount ||
@@ -48,9 +53,9 @@
 
     const config = JSON.parse(configElement.textContent);
     const namespace = "http://www.w3.org/2000/svg";
-    const chartWidth = 800;
-    const chartHeight = 390;
-    const plot = { left: 64, right: 24, top: 24, bottom: 70 };
+    const chartWidth = 1000;
+    const chartHeight = 430;
+    const plot = { left: 84, right: 34, top: 28, bottom: 72 };
     const metricLabels = {
         overall_score: "Overall Score",
         completed_repetitions: "Completed Repetitions",
@@ -82,6 +87,20 @@
         label.textContent = text;
         parent.appendChild(label);
         return label;
+    }
+
+    function smoothPath(points) {
+        if (!points.length) {
+            return "";
+        }
+        let path = `M ${points[0].x} ${points[0].y}`;
+        for (let index = 1; index < points.length; index += 1) {
+            const previous = points[index - 1];
+            const current = points[index];
+            const midpoint = (previous.x + current.x) / 2;
+            path += ` C ${midpoint} ${previous.y}, ${midpoint} ${current.y}, ${current.x} ${current.y}`;
+        }
+        return path;
     }
 
     function setStatus(message, isError = false) {
@@ -161,31 +180,68 @@
 
     function setSummary(values, metric) {
         summary.hidden = values.length === 0;
+        latestCallout.hidden = values.length === 0;
+        changeValue.classList.remove("is-positive", "is-negative", "is-neutral");
+        latestTrend.classList.remove("is-positive", "is-negative", "is-neutral");
+
         if (!values.length) {
             latestValue.textContent = "—";
             previousValue.textContent = "—";
             changeValue.textContent = "—";
+            highlightedValue.textContent = "—";
+            latestLabel.textContent = metric === "overall_score"
+                ? "Latest Score"
+                : `Latest ${metricLabels[metric]}`;
+            latestTrend.textContent = "No value recorded";
             return;
         }
+
         const latest = values[values.length - 1];
         const previous = values.length > 1 ? values[values.length - 2] : null;
-        latestValue.textContent = formatMetricValue(latest, metric) || "—";
-        previousValue.textContent = previous ? formatMetricValue(previous, metric) || "—" : "—";
-        if (!previous || metric === "resistance_value" &&
-            latest.resistance_unit !== previous.resistance_unit) {
+        const latestFormatted = formatMetricValue(latest, metric) || "—";
+        latestValue.textContent = latestFormatted;
+        previousValue.textContent = previous
+            ? formatMetricValue(previous, metric) || "—"
+            : "—";
+        highlightedValue.textContent = latestFormatted;
+        latestLabel.textContent = metric === "overall_score"
+            ? "Latest Score"
+            : `Latest ${metricLabels[metric]}`;
+
+        const unitsDiffer = previous &&
+            metric === "resistance_value" &&
+            latest.resistance_unit !== previous.resistance_unit;
+        if (!previous || unitsDiffer) {
             changeValue.textContent = "—";
+            latestTrend.textContent = unitsDiffer
+                ? "Different units from previous"
+                : "First recorded value";
+            latestTrend.classList.add("is-neutral");
+            changeValue.classList.add("is-neutral");
             return;
         }
+
         const change = latest[metric] - previous[metric];
-        changeValue.textContent = `${change >= 0 ? "+" : ""}${formatNumber(change)}${
-            metric === "overall_score" ? "%" : ""
-        }`;
+        const suffix = metric === "overall_score"
+            ? "%"
+            : metric === "resistance_value" && latest.resistance_unit
+                ? ` ${latest.resistance_unit}`
+                : "";
+        const changeText = `${change > 0 ? "+" : ""}${formatNumber(change)}${suffix}`;
+        const trendText = `${change > 0 ? "▲" : change < 0 ? "▼" : "•"} ${formatNumber(Math.abs(change))}${suffix} vs. previous`;
+        changeValue.textContent = changeText;
+        latestTrend.textContent = trendText;
+
+        const direction = change > 0 ? "is-positive" : change < 0 ? "is-negative" : "is-neutral";
+        changeValue.classList.add(direction);
+        latestTrend.classList.add(direction);
     }
 
     function renderEmpty(message) {
         chart.replaceChildren();
         chart.hidden = true;
         summary.hidden = true;
+        latestCallout.hidden = true;
         emptyMessage.hidden = false;
         emptyMessage.textContent = message;
         tooltip.style.display = "none";
@@ -236,6 +292,53 @@
             : plot.left + (index / (values.length - 1)) * plotWidth;
 
         chart.replaceChildren();
+
+        const definitions = createSvgElement("defs");
+        const areaGradient = createSvgElement("linearGradient", {
+            id: "progress-area-gradient",
+            x1: "0%", y1: "0%", x2: "0%", y2: "100%",
+        });
+        areaGradient.appendChild(createSvgElement("stop", {
+            offset: "0%",
+            "stop-color": "#3b82f6",
+            "stop-opacity": "0.30",
+        }));
+        areaGradient.appendChild(createSvgElement("stop", {
+            offset: "100%",
+            "stop-color": "#3b82f6",
+            "stop-opacity": "0.015",
+        }));
+        definitions.appendChild(areaGradient);
+
+        const glow = createSvgElement("filter", {
+            id: "progress-line-glow",
+            x: "-25%", y: "-40%", width: "150%", height: "180%",
+        });
+        glow.appendChild(createSvgElement("feGaussianBlur", {
+            stdDeviation: "2.5",
+            result: "line-blur",
+        }));
+        const merge = createSvgElement("feMerge");
+        merge.appendChild(createSvgElement("feMergeNode", { in: "line-blur" }));
+        merge.appendChild(createSvgElement("feMergeNode", { in: "SourceGraphic" }));
+        glow.appendChild(merge);
+        definitions.appendChild(glow);
+        chart.appendChild(definitions);
+
+        const chartPoints = values.map((result, index) => ({
+            x: xPosition(index),
+            y: yPosition(result[metric]),
+            result,
+        }));
+        const baseline = chartHeight - plot.bottom;
+        if (chartPoints.length > 1) {
+            const areaPath = `${smoothPath(chartPoints)} L ${chartPoints[chartPoints.length - 1].x} ${baseline} L ${chartPoints[0].x} ${baseline} Z`;
+            chart.appendChild(createSvgElement("path", {
+                d: areaPath,
+                class: "progress-area",
+            }));
+        }
+
         for (let index = 0; index <= 4; index += 1) {
             const value = min + ((max - min) * index / 4);
             const y = yPosition(value);
@@ -246,36 +349,55 @@
             addLabel(
                 chart,
                 `${formatNumber(value)}${metric === "overall_score" ? "%" : ""}`,
-                plot.left - 12,
-                y + 4,
+                plot.left - 16,
+                y + 5,
                 "chart-label",
                 "end",
             );
         }
+
+        const guideStep = Math.max(1, Math.ceil(chartPoints.length / 7));
+        chartPoints.forEach((point, index) => {
+            if (
+                index === 0 ||
+                index === chartPoints.length - 1 ||
+                index % guideStep === 0
+            ) {
+                chart.appendChild(createSvgElement("line", {
+                    x1: point.x,
+                    y1: plot.top,
+                    x2: point.x,
+                    y2: baseline,
+                    class: "chart-gridline chart-gridline-vertical",
+                }));
+            }
+        });
+
         chart.appendChild(createSvgElement("line", {
             x1: plot.left, y1: plot.top, x2: plot.left,
-            y2: chartHeight - plot.bottom, class: "chart-axis",
+            y2: baseline, class: "chart-axis",
         }));
         chart.appendChild(createSvgElement("line", {
-            x1: plot.left, y1: chartHeight - plot.bottom,
-            x2: chartWidth - plot.right, y2: chartHeight - plot.bottom,
+            x1: plot.left, y1: baseline,
+            x2: chartWidth - plot.right, y2: baseline,
             class: "chart-axis",
         }));
         addLabel(
-            chart, metricLabels[metric], 18, plot.top + plotHeight / 2,
+            chart, metricLabels[metric], 25, plot.top + plotHeight / 2,
             "chart-axis-title",
-        ).setAttribute("transform", `rotate(-90 18 ${plot.top + plotHeight / 2})`);
+        ).setAttribute("transform", `rotate(-90 25 ${plot.top + plotHeight / 2})`);
         addLabel(
             chart, "Date (oldest to newest)", plot.left + plotWidth / 2,
-            chartHeight - 12, "chart-axis-title",
+            chartHeight - 14, "chart-axis-title",
         );
 
-        chart.appendChild(createSvgElement("polyline", {
-            points: values.map((result, index) => (
-                `${xPosition(index)},${yPosition(result[metric])}`
-            )).join(" "),
-            class: "progress-line",
-        }));
+        const linePath = smoothPath(chartPoints);
+        if (chartPoints.length > 1) {
+            chart.appendChild(createSvgElement("path", {
+                d: linePath,
+                class: "progress-line",
+            }));
+        }
         values.forEach((result, index) => {
             const circle = createSvgElement("circle", {
                 cx: xPosition(index), cy: yPosition(result[metric]), r: 7,
