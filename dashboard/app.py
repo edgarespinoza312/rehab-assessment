@@ -831,7 +831,6 @@ def selection():
     ):
         return jsonify({"error": "forbidden"}), 403
 
-    print("Selection page patient_id =", patient_id)
 
     workout_presets = []
     for preset in BUILTIN_PRESETS.values():
@@ -1474,7 +1473,6 @@ def start_assessment():
     ):
         return jsonify({"error": "forbidden"}), 403
 
-    print("Start assessment patient_id =", patient_id)
 
     exercise_type = ExerciseType[exercise_name]
 
@@ -1719,7 +1717,6 @@ def assessment_session():
             return jsonify({"error": "patient profile is not linked"}), 403
         patient_id = identity.patient_id
 
-    print(f"Patient ID: {patient_id}")
 
     context = runtime_context_for_request()
     if context is None:
@@ -1855,8 +1852,6 @@ def report():
     patient_id = report_snapshot.get("patient_id")
     if patient_id is not None:
         patient = Patient.query.get(patient_id)
-    print("REPORT completed_session:", report_snapshot)
-    print("REPORT patient:", patient)
 
     return render_template(
         "report.html",
@@ -1889,10 +1884,6 @@ def save_assessment():
         snapshot = dict(context.completed_session)
         snapshot["feedback"] = list(context.completed_session.get("feedback", []))
 
-    print("\n========== SAVE ASSESSMENT ==========")
-    print("session.patient_id:", source_patient_id)
-    print("completed_session:", snapshot)
-    print("=====================================\n")
 
     record = AssessmentRecord(
         patient_id=snapshot["patient_id"],
@@ -2561,19 +2552,6 @@ def _generate_frames(context=None):
                             )
                             biomechanics.reset_rep_metrics()
 
-                        print("\n========== REP COMPLETE ==========")
-                        print("Measured Metrics")
-                        print(f"ROM: {fmt(rep_metrics.range_of_motion if rep_metrics else None)}")
-                        print(f"Peak Flexion: {fmt(rep_metrics.peak_flexion if rep_metrics else None)}")
-                        print(f"Peak Extension: {fmt(rep_metrics.peak_extension if rep_metrics else None)}")
-                        print(f"Rep Duration: {fmt(rep_metrics.rep_duration if rep_metrics else None)}")
-                        print(f"Trunk Lean: {fmt(rep_metrics.trunk_lean if rep_metrics else None)}")
-                        print("\nScores")
-                        print(f"ROM Score: {fmt(rep_result.rom_score, 1)}")
-                        print(f"Tempo Score: {fmt(rep_result.tempo_score, 1)}")
-                        print(f"Completion Score: {fmt(rep_result.completion_score, 1)}")
-                        print(f"Overall Score: {fmt(rep_result.overall_score, 1)}")
-                        print("==================================\n")
 
                 if rejected_pose_result:
                     display_skeleton, display_only_stale = display_pose_continuity.for_display(
