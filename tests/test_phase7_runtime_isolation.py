@@ -120,6 +120,19 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
                 {"error": "assessment save already in progress"},
             )
             self.assertEqual(AssessmentRecord.query.count(), initial_count)
+
+            finish_response = client.post(
+                "/finish",
+                data={"csrf_token": csrf},
+            )
+            self.assertEqual(finish_response.status_code, 409)
+
+            discard_response = client.post(
+                "/discard",
+                data={"csrf_token": csrf},
+            )
+            self.assertEqual(discard_response.status_code, 409)
+            self.assertIsNotNone(context.completed_session)
         finally:
             with context.lock:
                 context.save_in_progress = False
