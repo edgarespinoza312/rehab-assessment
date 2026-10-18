@@ -2163,7 +2163,7 @@ def video_status():
 def session_data():
     """Return a coherent snapshot of the current assessment."""
 
-    context = runtime_context_for_request()
+    context = runtime_context_for_request(create=False)
     if context is None:
         return jsonify({"error": "no active runtime"}), 404
     with context.lock:

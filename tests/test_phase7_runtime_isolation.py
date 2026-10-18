@@ -181,23 +181,25 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
     def test_request_recovers_when_signed_session_references_missing_runtime(self):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
-        self._start_assessment(client, 1)
-        with client.session_transaction() as state:
-            old_runtime_id = state[RUNTIME_SESSION_KEY]
-        old_context = runtime_registry.get(old_runtime_id)
-        self.assertIsNotNone(old_context)
+        with patch.object(app, "testing", False):
+            self._start_assessment(client, 1)
+            with client.session_transaction() as state:
+                old_runtime_id = state[RUNTIME_SESSION_KEY]
+            old_context = runtime_registry.get(old_runtime_id)
+            self.assertIsNotNone(old_context)
 
-        _release_runtime_context(old_runtime_id)
-        missing_runtime_response = client.get("/session")
-        self.assertEqual(missing_runtime_response.status_code, 404)
-        with client.session_transaction() as state:
-            self.assertNotIn(RUNTIME_SESSION_KEY, state)
+            _release_runtime_context(old_runtime_id)
+            missing_runtime_response = client.get("/session")
+            self.assertEqual(missing_runtime_response.status_code, 404)
+            with client.session_transaction() as state:
+                self.assertNotIn(RUNTIME_SESSION_KEY, state)
 
-        self._start_assessment(client, 1)
-        with client.session_transaction() as state:
-            new_runtime_id = state[RUNTIME_SESSION_KEY]
-        self.assertNotEqual(new_runtime_id, old_runtime_id)
-        self.assertIsNotNone(runtime_registry.get(new_runtime_id))
+            self._start_assessment(client, 1)
+            with client.session_transaction() as state:
+                new_runtime_id = state[RUNTIME_SESSION_KEY]
+            self.assertNotEqual(new_runtime_id, old_runtime_id)
+            self.assertIsNotNone(runtime_registry.get(new_runtime_id))
+            _release_runtime_context(new_runtime_id)
 
     def test_finishing_legacy_assessment_marks_runtime_completed(self):
         client = app.test_client()
