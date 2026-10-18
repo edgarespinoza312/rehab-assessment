@@ -11,7 +11,7 @@ from dashboard.app import (
     _release_runtime_context,
 )
 from dashboard.database import db
-from dashboard.models import Patient, Role, User
+from dashboard.models import AssessmentRecord, Patient, Role, User
 from dashboard.runtime_context import RuntimeLifecycle
 from core.models import AssessmentResult
 from dashboard.services.authentication import RUNTIME_SESSION_KEY, hash_password
@@ -83,6 +83,46 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertEqual(response.get_json(), {"error": "camera unavailable"})
         self.assertFalse(video_consumer_guard.active)
         self.assertEqual(client.get("/patient").status_code, 200)
+
+    def test_assessment_save_rejects_concurrent_duplicate_submission(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+            csrf = state["revaliv_csrf_token"]
+
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        with context.lock:
+            context.completed_session = {
+                "patient_id": 1,
+                "exercise": "Left Bicep Curl",
+                "repetitions": 3,
+                "average_score": 80.0,
+                "best_score": 90.0,
+                "worst_score": 70.0,
+                "trend": "stable",
+                "feedback": [],
+            }
+            context.save_in_progress = True
+
+        initial_count = AssessmentRecord.query.count()
+        try:
+            response = client.post(
+                "/save_assessment",
+                data={"csrf_token": csrf},
+            )
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(
+                response.get_json(),
+                {"error": "assessment save already in progress"},
+            )
+            self.assertEqual(AssessmentRecord.query.count(), initial_count)
+        finally:
+            with context.lock:
+                context.save_in_progress = False
+            _release_runtime_context(runtime_id)
 
     def test_two_users_receive_independent_owned_runtimes(self):
         client_a = app.test_client()
