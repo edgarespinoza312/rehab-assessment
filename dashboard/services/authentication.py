@@ -30,11 +30,16 @@ from dashboard.services.identity import (
 SESSION_USER_KEY = "revaliv_user_id"
 CSRF_SESSION_KEY = "revaliv_csrf_token"
 RUNTIME_SESSION_KEY = "revaliv_runtime_id"
+MAX_PASSWORD_LENGTH = 1024
 
 
 def hash_password(password: str) -> str:
     if not isinstance(password, str) or len(password) < 8:
         raise ValueError("password must contain at least 8 characters")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise ValueError(
+            f"password must be at most {MAX_PASSWORD_LENGTH} characters"
+        )
     return generate_password_hash(password)
 
 
@@ -42,6 +47,7 @@ def verify_password(user: User, password: str) -> bool:
     return bool(
         user.password_hash
         and isinstance(password, str)
+        and len(password) <= MAX_PASSWORD_LENGTH
         and check_password_hash(user.password_hash, password)
     )
 

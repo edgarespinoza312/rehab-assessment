@@ -9,6 +9,8 @@ from dashboard.services.authentication import hash_password
 # OPERATOR remains in the schema for existing accounts, but is not provisionable
 # until its intended workspace and capabilities are defined.
 VALID_ROLES = {"PATIENT", "CLINICIAN", "ADMIN"}
+MAX_DISPLAY_NAME_LENGTH = 120
+MAX_EMAIL_LENGTH = 255
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -27,6 +29,11 @@ def create_user(*, display_name, email, password, role, patient_id=None):
     """Create an active user; callers must be trusted server-side code."""
     if not isinstance(display_name, str) or not display_name.strip():
         raise ValueError("display_name is required")
+    normalized_display_name = display_name.strip()
+    if len(normalized_display_name) > MAX_DISPLAY_NAME_LENGTH:
+        raise ValueError(
+            f"display_name must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
+        )
     normalized_email = normalize_email(email)
     if User.query.filter_by(email=normalized_email).first() is not None:
         raise ValueError("email is already in use")
@@ -39,7 +46,7 @@ def create_user(*, display_name, email, password, role, patient_id=None):
         if User.query.filter_by(patient_id=patient_id).first() is not None:
             raise ValueError("patient is already linked")
     user = User(
-        display_name=display_name.strip(),
+        display_name=normalized_display_name,
         email=normalized_email,
         password_hash=hash_password(password),
         status="ACTIVE",
@@ -55,6 +62,8 @@ def normalize_email(email: str) -> str:
     if not isinstance(email, str):
         raise ValueError("email is required")
     normalized = email.strip().lower()
+    if len(normalized) > MAX_EMAIL_LENGTH:
+        raise ValueError(f"email must be at most {MAX_EMAIL_LENGTH} characters")
     if not normalized or not EMAIL_PATTERN.fullmatch(normalized):
         raise ValueError("enter a valid email address")
     return normalized
@@ -64,7 +73,12 @@ def create_patient_account(*, display_name, email, password):
     """Create and link a new patient account atomically."""
     if not isinstance(display_name, str) or not display_name.strip():
         raise ValueError("display name is required")
-    parts = display_name.strip().split(maxsplit=1)
+    normalized_display_name = display_name.strip()
+    if len(normalized_display_name) > MAX_DISPLAY_NAME_LENGTH:
+        raise ValueError(
+            f"display name must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
+        )
+    parts = normalized_display_name.split(maxsplit=1)
     first_name = parts[0]
     last_name = parts[1] if len(parts) == 2 else "Patient"
     patient = Patient(first_name=first_name[:50], last_name=last_name[:50])
@@ -72,7 +86,7 @@ def create_patient_account(*, display_name, email, password):
     db.session.flush()
     try:
         user = create_user(
-            display_name=display_name,
+            display_name=normalized_display_name,
             email=email,
             password=password,
             role="PATIENT",

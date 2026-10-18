@@ -112,6 +112,79 @@ class Phase7FAuthenticationTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 400)
 
+    def test_registration_rejects_oversized_fields_without_creating_records(self):
+        client = app.test_client()
+        client.get("/register")
+        token = self.csrf(client)
+        initial_patient_count = Patient.query.count()
+        initial_user_count = User.query.count()
+        oversized_email = ("a" * 250) + "@example.test"
+        invalid_cases = [
+            ("display name", {
+                "display_name": "N" * 121,
+                "email": "long-name@example.test",
+                "password": "safe password",
+                "confirm_password": "safe password",
+            }),
+            ("email", {
+                "display_name": "Long Email",
+                "email": oversized_email,
+                "password": "safe password",
+                "confirm_password": "safe password",
+            }),
+            ("password", {
+                "display_name": "Long Password",
+                "email": "long-password@example.test",
+                "password": "p" * 1025,
+                "confirm_password": "p" * 1025,
+            }),
+        ]
+        for case, fields in invalid_cases:
+            with self.subTest(case=case):
+                response = client.post(
+                    "/register",
+                    data={"csrf_token": token, **fields},
+                )
+                self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(Patient.query.count(), initial_patient_count)
+        self.assertEqual(User.query.count(), initial_user_count)
+
+    def test_admin_account_creation_rejects_oversized_fields(self):
+        client = app.test_client()
+        self.login(client, "admin@example.test", "ADMIN")
+        token = self.csrf(client)
+        initial_user_count = User.query.count()
+        oversized_email = ("a" * 250) + "@example.test"
+        invalid_cases = [
+            ("display name", {
+                "display_name": "N" * 121,
+                "email": "long-name-admin@example.test",
+                "password": "safe password",
+            }),
+            ("email", {
+                "display_name": "Long Email",
+                "email": oversized_email,
+                "password": "safe password",
+            }),
+            ("password", {
+                "display_name": "Long Password",
+                "email": "long-password-admin@example.test",
+                "password": "p" * 1025,
+            }),
+        ]
+        for case, fields in invalid_cases:
+            with self.subTest(case=case):
+                response = client.post("/admin/accounts", data={
+                    "csrf_token": token,
+                    "role": "CLINICIAN",
+                    "patient_id": "0",
+                    **fields,
+                })
+                self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(User.query.count(), initial_user_count)
+
     def test_only_admin_can_manage_accounts(self):
         anonymous = app.test_client()
         self.assertEqual(anonymous.get("/admin/accounts").status_code, 302)
