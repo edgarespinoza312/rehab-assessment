@@ -6,6 +6,7 @@ from dashboard.database import db
 from dashboard.models import (
     CompletedWorkoutSession,
     ExerciseIdentity,
+    ProgressionReviewEvent,
     Patient,
     WorkoutExerciseResult,
 )
@@ -127,6 +128,18 @@ class ProgressionReviewServiceTests(unittest.TestCase):
         self.assertEqual(history[0].disposition, "REVIEWED")
         self.assertEqual(history[-1].disposition, "ACKNOWLEDGED")
         self.assertEqual(history[0].note, "First review")
+
+    def test_create_review_event_rejects_non_string_dispositions(self):
+        decision = self._decision()
+        for disposition in ([], {}, 1, None):
+            with self.subTest(disposition=disposition):
+                with self.assertRaisesRegex(ValueError, "invalid disposition"):
+                    create_review_event(
+                        decision,
+                        reviewer_reference="reviewer",
+                        disposition=disposition,
+                    )
+        self.assertEqual(db.session.query(ProgressionReviewEvent).count(), 0)
 
     def test_validation_and_no_evidence_guard(self):
         with self.assertRaises(ValueError):
