@@ -5,6 +5,7 @@ from dashboard.app import app, runtime_registry, _generate_frames
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.runtime_context import RuntimeLifecycle
+from core.models import AssessmentResult
 from dashboard.services.authentication import RUNTIME_SESSION_KEY, hash_password
 from dashboard.services.user_provisioning import create_user, disable_user
 
@@ -197,11 +198,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
             csrf = state["revaliv_csrf_token"]
         context = runtime_registry.get(runtime_id)
         self.assertIsNotNone(context)
-        context.session_manager.add_result(
-            __import__("core.models", fromlist=["AssessmentResult"]).AssessmentResult(
-                overall_score=75,
-            )
-        )
+        context.session_manager.add_result(AssessmentResult(overall_score=75))
 
         response = client.post("/discard", data={"csrf_token": csrf})
 
@@ -217,7 +214,6 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self._login(client, "a@example.test", "password-a")
         with client.session_transaction() as state:
             csrf = state["revaliv_csrf_token"]
-            runtime_id = state[RUNTIME_SESSION_KEY] if RUNTIME_SESSION_KEY in state else None
         started = client.post(
             "/workout/start",
             json={
