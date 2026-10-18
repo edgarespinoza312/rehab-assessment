@@ -15,6 +15,9 @@ from core.workout import (
     WorkoutPrescription,
 )
 from dashboard.database import db
+MAX_WORKOUT_PLAN_NAME_LENGTH = 120
+
+
 from dashboard.models import (
     CompletedWorkoutSession,
     ExerciseIdentity,
@@ -42,6 +45,11 @@ def create_workout_plan(
     prescriptions = tuple(exercises)
     if not isinstance(name, str) or not name.strip():
         raise ValueError("workout plan name is required")
+    normalized_name = name.strip()
+    if len(normalized_name) > MAX_WORKOUT_PLAN_NAME_LENGTH:
+        raise ValueError(
+            f"workout plan name must be at most {MAX_WORKOUT_PLAN_NAME_LENGTH} characters"
+        )
     if not isinstance(description, str):
         raise ValueError("workout plan description must be text")
     if not prescriptions:
@@ -61,7 +69,7 @@ def create_workout_plan(
         _ensure_exercise_identities()
         plan = WorkoutPlan(
             patient_id=patient_id,
-            name=name.strip(),
+            name=normalized_name,
             description=description.strip() if isinstance(description, str) else "",
             exercises=[
                 WorkoutPlanExercise(
