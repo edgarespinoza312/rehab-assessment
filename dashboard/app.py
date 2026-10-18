@@ -1504,9 +1504,14 @@ def delete_patient(patient_id):
 @app.route("/assessment", methods=["POST"])
 @require_auth
 def start_assessment():
-    exercise_name = request.form["exercise"]
+    exercise_name = request.form.get("exercise")
     patient_id = request.form.get("patient_id", type=int)
     require_csrf()
+
+    try:
+        exercise_type = ExerciseType[exercise_name]
+    except (KeyError, TypeError):
+        return jsonify({"error": "unknown exercise"}), 400
     identity = current_identity()
     if any(role.value == "PATIENT" for role in identity.roles) and not any(
         role.value == "CLINICIAN" for role in identity.roles
@@ -1523,8 +1528,6 @@ def start_assessment():
     ):
         return jsonify({"error": "forbidden"}), 403
 
-
-    exercise_type = ExerciseType[exercise_name]
 
     new_session = AssessmentSession(
         exercise=exercise_type,
@@ -2302,7 +2305,10 @@ def exercise_info(exercise_name):
     Returns metadata describing a rehabilitation exercise.
     """
 
-    exercise_type = ExerciseType[exercise_name]
+    try:
+        exercise_type = ExerciseType[exercise_name]
+    except (KeyError, TypeError):
+        abort(404)
 
     profile = get_exercise_profile(
         exercise_type,

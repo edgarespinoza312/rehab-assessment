@@ -350,6 +350,22 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_feed").status_code, 404)
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
+    def test_unknown_exercise_requests_return_client_errors(self):
+        self._login("clinician@example.test", "CLINICIAN")
+
+        unknown_info = self.client.get("/exercise_info/NOT_A_REAL_EXERCISE")
+        self.assertEqual(unknown_info.status_code, 404)
+
+        unknown_start = self.client.post(
+            "/assessment",
+            data={
+                "csrf_token": self._csrf(),
+                "exercise": "NOT_A_REAL_EXERCISE",
+                "patient_id": 1,
+            },
+        )
+        self.assertEqual(unknown_start.status_code, 400)
+
     def test_destructive_actions_require_explicit_clinician_delete_capabilities(self):
         record = AssessmentRecord(
             assessment_id=1,
