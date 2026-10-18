@@ -108,6 +108,7 @@ from core.workout import (
 from core.workout.registry import BUILTIN_EXERCISES
 from dashboard.workout_runtime import WorkoutRuntimeAdapter
 from dashboard.services.workout_persistence import (
+    MAX_WORKOUT_PLAN_EXERCISES,
     create_workout_plan,
     list_workout_plans,
     load_workout_preset,
@@ -1097,6 +1098,13 @@ def save_workout_plan():
     exercise_items = payload.get("exercises")
     if not isinstance(exercise_items, list) or not exercise_items:
         return jsonify({"error": "at least one workout exercise is required"}), 400
+    if len(exercise_items) > MAX_WORKOUT_PLAN_EXERCISES:
+        return jsonify({
+            "error": (
+                f"a workout plan may contain at most "
+                f"{MAX_WORKOUT_PLAN_EXERCISES} exercises"
+            )
+        }), 400
 
     positions = [item.get("position") for item in exercise_items if isinstance(item, dict)]
     if (
