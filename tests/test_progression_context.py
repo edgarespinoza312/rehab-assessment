@@ -167,6 +167,14 @@ class ProgressionContextTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must not exceed 100"):
             get_patient_progression_context(1, recent_limit=101)
 
+        for invalid_limit in (True, False, 5.0, "5", None):
+            with self.subTest(recent_limit=invalid_limit):
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    get_patient_progression_context(
+                        1,
+                        recent_limit=invalid_limit,
+                    )
+
     def test_side_multiple_exercises_units_and_order_are_preserved(self):
         self._add_session(
             "context-multi",
