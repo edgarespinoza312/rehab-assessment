@@ -192,6 +192,29 @@ class ProgressionApiTests(unittest.TestCase):
             400,
         )
 
+    def test_timezone_aware_filters_are_normalized_to_utc(self):
+        self._add_session(
+            "api-timezone-filter",
+            1,
+            datetime(2026, 1, 2, 10),
+            "completed",
+            [("right", 3, 3, 5, "lb", 87)],
+        )
+
+        aware_range = self.client.get(
+            "/api/patients/1/progression"
+            "?start=2026-01-02T09:00:00-01:00&end=2026-01-02T11:00:00Z"
+        )
+        self.assertEqual(aware_range.status_code, 200)
+        self.assertEqual(aware_range.get_json()["count"], 1)
+
+        mixed_range = self.client.get(
+            "/api/patients/1/progression"
+            "?start=2026-01-02T09:00:00-01:00&end=2026-01-02"
+        )
+        self.assertEqual(mixed_range.status_code, 200)
+        self.assertEqual(mixed_range.get_json()["count"], 1)
+
     def test_date_only_end_includes_the_entire_calendar_day(self):
         self._add_session(
             "api-date-only-end",
