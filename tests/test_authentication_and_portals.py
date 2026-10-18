@@ -14,7 +14,7 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         db.drop_all()
         db.create_all()
         patient = Patient(patient_id=1, first_name="Pat", last_name="User")
-        Patient(patient_id=2, first_name="Other", last_name="Patient")
+        other_patient = Patient(patient_id=2, first_name="Other", last_name="Patient")
         clinician = User(
             display_name="Clinician",
             email="clinician@example.test",
@@ -40,7 +40,7 @@ class AuthenticationAndPortalTests(unittest.TestCase):
             password_hash=hash_password("correct horse"),
         )
         admin.roles = [Role(name="ADMIN")]
-        db.session.add_all([patient, clinician, patient_user, operator, admin])
+        db.session.add_all([patient, other_patient, clinician, patient_user, operator, admin])
         db.session.commit()
         self.client = app.test_client()
 
@@ -224,7 +224,9 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/workout/builder?patient_id=1").status_code, 200)
         selection = self.client.get("/selection?patient_id=1")
         self.assertEqual(selection.status_code, 200)
-        self.assertIn("Patient, Pat", selection.get_data(as_text=True))
+        selection_html = selection.get_data(as_text=True)
+        self.assertIn("User, Pat", selection_html)
+        self.assertIn("Patient, Other", selection_html)
         response = self.client.post("/workout/plans", json={
             "name": "Clinician plan",
             "patient_id": 1,
