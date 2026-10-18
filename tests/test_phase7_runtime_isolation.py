@@ -170,14 +170,23 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
             runtime_id = state[RUNTIME_SESSION_KEY]
         context = runtime_registry.get(runtime_id)
         self.assertIsNotNone(context)
-        # Model the state change between loop admission and frame processing.
-        context.completed_session = {"patient_id": 1}
+
+        def finish_during_capture():
+            with context.lock:
+                # Simulate /finish winning the lock after camera capture starts.
+                context.completed_session = {"patient_id": 1}
+            return object()
 
         frames = _generate_frames(context)
-        with patch("dashboard.app.vision.get_frame") as get_frame:
+        with (
+            patch("dashboard.app.vision.get_frame", side_effect=finish_during_capture) as get_frame,
+            patch.object(context.pose, "process") as process_pose,
+        ):
             with self.assertRaises(StopIteration):
                 next(frames)
-        get_frame.assert_not_called()
+
+        get_frame.assert_called_once()
+        process_pose.assert_not_called()
 
     def test_workout_cancellation_does_not_change_other_runtime(self):
         client_a = app.test_client()
