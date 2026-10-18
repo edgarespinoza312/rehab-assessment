@@ -498,6 +498,43 @@ def _release_user_runtime_contexts(user_id: int) -> None:
             )
 
 
+def _release_patient_runtime_contexts(patient_id: int) -> None:
+    """Release runtime state whose current or completed work references a patient."""
+    for context in runtime_registry.snapshot():
+        with context.lock:
+            matches_patient = context.patient_id == patient_id
+            if context.session is not None:
+                matches_patient = (
+                    matches_patient or context.session.patient_id == patient_id
+                )
+            if context.completed_session is not None:
+                matches_patient = (
+                    matches_patient
+                    or context.completed_session.get("patient_id") == patient_id
+                )
+            if context.workout_runtime is not None:
+                try:
+                    matches_patient = (
+                        matches_patient
+                        or context.workout_runtime.snapshot().patient_id == patient_id
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to inspect workout runtime %s during patient deletion",
+                        context.runtime_id,
+                    )
+        if not matches_patient:
+            continue
+        try:
+            _release_runtime_context(context.runtime_id)
+        except Exception:
+            logger.exception(
+                "Failed to release runtime %s after patient %s was deleted",
+                context.runtime_id,
+                patient_id,
+            )
+
+
 @app.before_request
 def release_orphaned_runtime():
     """Release runtime state when its cookie no longer identifies an active user."""
@@ -1614,6 +1651,7 @@ def delete_patient(patient_id):
 
     db.session.delete(patient)
     db.session.commit()
+    _release_patient_runtime_contexts(patient_id)
 
     return redirect(
         url_for("patient_registry")
