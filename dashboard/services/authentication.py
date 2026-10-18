@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
 from functools import wraps
 
@@ -30,6 +32,7 @@ from dashboard.services.identity import (
 SESSION_USER_KEY = "revaliv_user_id"
 CSRF_SESSION_KEY = "revaliv_csrf_token"
 RUNTIME_SESSION_KEY = "revaliv_runtime_id"
+SESSION_AUTH_FINGERPRINT_KEY = "revaliv_auth_fingerprint"
 MAX_PASSWORD_LENGTH = 1024
 
 
@@ -52,14 +55,49 @@ def verify_password(user: User, password: str) -> bool:
     )
 
 
+def _session_auth_fingerprint(password_hash: str) -> str:
+    """Bind a browser session to the account's current password hash.
+
+    The keyed fingerprint stays opaque in Flask's signed client-side session.
+    Changing the password makes all previously issued session cookies stale.
+    """
+    secret = current_app.config["SECRET_KEY"]
+    if isinstance(secret, str):
+        secret = secret.encode("utf-8")
+    return hmac.new(
+        secret,
+        password_hash.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def load_identity() -> IdentityContext:
     user_id = session.get(SESSION_USER_KEY)
-    if not isinstance(user_id, int):
+    if isinstance(user_id, bool) or not isinstance(user_id, int):
         return anonymous_identity()
     user = db.session.get(User, user_id)
-    if user is None or user.status != "ACTIVE":
+    if (
+        user is None
+        or user.status != "ACTIVE"
+        or not isinstance(user.password_hash, str)
+        or not user.password_hash
+    ):
         session.pop(SESSION_USER_KEY, None)
+        session.pop(SESSION_AUTH_FINGERPRINT_KEY, None)
         return anonymous_identity()
+
+    stored_fingerprint = session.get(SESSION_AUTH_FINGERPRINT_KEY)
+    expected_fingerprint = _session_auth_fingerprint(user.password_hash)
+    if (
+        not isinstance(stored_fingerprint, str)
+        or not secrets.compare_digest(stored_fingerprint, expected_fingerprint)
+    ):
+        # Missing fingerprints also revoke sessions issued before this guard
+        # existed. A valid login must establish the current fingerprint.
+        session.pop(SESSION_USER_KEY, None)
+        session.pop(SESSION_AUTH_FINGERPRINT_KEY, None)
+        return anonymous_identity()
+
     return identity_from_user(user)
 
 
@@ -74,6 +112,7 @@ def current_identity() -> IdentityContext:
 def login_user(user: User) -> None:
     session.clear()
     session[SESSION_USER_KEY] = user.user_id
+    session[SESSION_AUTH_FINGERPRINT_KEY] = _session_auth_fingerprint(user.password_hash)
     session[CSRF_SESSION_KEY] = secrets.token_urlsafe(32)
     session.permanent = True
     g.identity_context = identity_from_user(user)
