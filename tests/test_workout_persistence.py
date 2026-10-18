@@ -114,6 +114,17 @@ class WorkoutPersistenceTests(unittest.TestCase):
         )
         self.assertEqual(len(plan.description), 10_000)
 
+    def test_workout_plan_exercise_count_is_bounded(self):
+        prescription = WorkoutPrescription("bicep_curl", "left", 4)
+        with self.assertRaisesRegex(ValueError, "at most 50 exercises"):
+            create_workout_plan("Too many exercises", (prescription,) * 51)
+
+        self.assertEqual(WorkoutPlan.query.count(), 0)
+        self.assertEqual(ExerciseIdentity.query.count(), 0)
+
+        plan = create_workout_plan("Maximum exercise count", (prescription,) * 50)
+        self.assertEqual(len(plan.exercises), 50)
+
     def test_patient_scoped_loading_allows_shared_or_matching_plan_only(self):
         patient_plan = create_workout_plan(
             "Patient curls",
