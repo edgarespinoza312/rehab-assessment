@@ -114,6 +114,30 @@ class WorkoutPersistenceTests(unittest.TestCase):
         )
         self.assertEqual(len(plan.description), 10_000)
 
+    def test_workout_prescription_values_match_storage_limits(self):
+        with self.assertRaisesRegex(ValueError, "between 1 and 1000"):
+            WorkoutPrescription("bicep_curl", "left", 1001)
+        with self.assertRaisesRegex(ValueError, "resistance_value must be between 0 and"):
+            WorkoutPrescription(
+                "bicep_curl", "left", 4, 10_000_000, "kg"
+            )
+        with self.assertRaisesRegex(ValueError, "at most 24 characters"):
+            WorkoutPrescription(
+                "bicep_curl", "left", 4, 5, "u" * 25
+            )
+        with self.assertRaisesRegex(ValueError, "at most 40 characters"):
+            WorkoutPrescription(
+                "bicep_curl", "left", 4, 5, "kg", "t" * 41
+            )
+
+        prescription = WorkoutPrescription(
+            "bicep_curl", "left", 1000, 9_999_999.999, "u" * 24, "t" * 40
+        )
+        self.assertEqual(prescription.target_repetitions, 1000)
+        self.assertEqual(len(prescription.resistance_unit), 24)
+        self.assertEqual(len(prescription.resistance_type), 40)
+        self.assertEqual(WorkoutPlan.query.count(), 0)
+
     def test_workout_plan_exercise_count_is_bounded(self):
         prescription = WorkoutPrescription("bicep_curl", "left", 4)
         with self.assertRaisesRegex(ValueError, "at most 50 exercises"):
