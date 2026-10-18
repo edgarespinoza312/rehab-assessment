@@ -227,6 +227,7 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         selection_html = selection.get_data(as_text=True)
         self.assertIn("User, Pat", selection_html)
         self.assertIn("Patient, Other", selection_html)
+        self.assertRegex(selection_html, r'<option value="1"\\s+selected>')
         response = self.client.post("/workout/plans", json={
             "name": "Clinician plan",
             "patient_id": 1,

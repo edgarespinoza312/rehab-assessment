@@ -845,6 +845,7 @@ def selection():
         workout_presets=workout_presets,
         workout_plans=workout_plans,
         patients=patients,
+        can_select_patient=clinician_role,
     )
 
 
