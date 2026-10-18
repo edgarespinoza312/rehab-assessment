@@ -15,7 +15,7 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _role(name: str) -> Role:
-    if name not in VALID_ROLES:
+    if not isinstance(name, str) or name not in VALID_ROLES:
         raise ValueError(f"invalid role: {name}")
     role = Role.query.filter_by(name=name).first()
     if role is None:
