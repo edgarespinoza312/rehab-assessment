@@ -765,7 +765,13 @@ def update_assessment_notes(assessment_id):
     ):
         abort(404)
 
-    assessment.notes = request.form["notes"]
+    notes = request.form.get("notes")
+    if not isinstance(notes, str):
+        return jsonify({"error": "notes must be provided as text"}), 400
+    if len(notes) > 10000:
+        return jsonify({"error": "notes must be 10,000 characters or fewer"}), 400
+
+    assessment.notes = notes
 
     db.session.commit()
 

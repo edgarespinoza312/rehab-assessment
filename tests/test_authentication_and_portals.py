@@ -162,6 +162,36 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertIn("Save Notes", clinician_html)
         self.assertIn("Enter additional observations", clinician_html)
 
+    def test_assessment_notes_reject_missing_or_overlong_input(self):
+        record = AssessmentRecord(
+            assessment_id=1,
+            patient_id=1,
+            exercise="Left Bicep Curl",
+            repetitions=1,
+            average_score=50.0,
+            best_score=60.0,
+            worst_score=40.0,
+            feedback="[]",
+            notes="Original note",
+        )
+        db.session.add(record)
+        db.session.commit()
+        self._login("clinician@example.test", "CLINICIAN")
+
+        invalid_updates = [
+            ("missing notes", {}),
+            ("overlong notes", {"notes": "N" * 10001}),
+        ]
+        for case, fields in invalid_updates:
+            with self.subTest(case=case):
+                payload = dict(fields)
+                payload["csrf_token"] = self._csrf()
+                response = self.client.post("/assessment/1/notes", data=payload)
+                self.assertEqual(response.status_code, 400)
+
+        db.session.refresh(record)
+        self.assertEqual(record.notes, "Original note")
+
     def test_patient_cannot_infer_other_assessment_ids_from_status_codes(self):
         record = AssessmentRecord(
             assessment_id=1,
