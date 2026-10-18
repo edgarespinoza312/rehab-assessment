@@ -6,6 +6,7 @@ from dashboard.app import (
     app,
     runtime_registry,
     video_consumer_guard,
+    vision,
     _generate_frames,
     _expire_idle_runtime_contexts,
     _release_runtime_context,
@@ -74,8 +75,8 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self._login(client, "a@example.test", "password-a")
         self._start_assessment(client, 1)
 
-        with patch.object(app.vision, "camera", None), patch.object(
-            app.vision, "start", side_effect=RuntimeError("camera unavailable")
+        with patch.object(vision, "camera", None), patch.object(
+            vision, "start", side_effect=RuntimeError("camera unavailable")
         ):
             response = client.get("/video_feed")
 
@@ -290,7 +291,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
 
         frames = _generate_frames(context)
         with (
-            patch("dashboard.app.vision.get_frame", side_effect=finish_during_capture) as get_frame,
+            patch("dashboard.vision.get_frame", side_effect=finish_during_capture) as get_frame,
             patch.object(context.pose, "process") as process_pose,
         ):
             with self.assertRaises(StopIteration):
