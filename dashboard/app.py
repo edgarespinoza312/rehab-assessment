@@ -726,15 +726,14 @@ def reset_password(token):
         logger.exception("Unable to save a password reset")
         abort(500)
 
-    # Reset links can be opened while another account is signed in. Tear
-    # down this browser's runtime as well as every runtime owned by the account
-    # whose password changed, including any long-lived video stream.
-    from flask import session as flask_session
-    _release_runtime_context(flask_session.get(RUNTIME_SESSION_KEY))
+    # Revoke every runtime owned by the account whose password changed.
+    # If this browser is still authenticated as that same account, log it out;
+    # a reset link opened from a different account must not disrupt that user.
     _release_user_runtime_contexts(user.user_id)
-    # Other signed cookies are rejected on their next request by the
-    # password-bound authentication fingerprint in load_identity().
-    logout_user()
+    if current_identity().user_id == user.user_id:
+        logout_user()
+    # Other signed cookies for the target account are rejected on their next
+    # request by the password-bound authentication fingerprint in load_identity().
     return redirect(url_for("login", password_reset="success"))
 
 
