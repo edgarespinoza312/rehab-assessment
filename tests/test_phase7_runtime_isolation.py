@@ -100,6 +100,14 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         completed_snapshot = context.completed_session
         self.assertIsNotNone(completed_snapshot)
 
+        workout_start = client.post(
+            "/workout/start",
+            json={"preset_id": "bilateral_bicep_curl_2", "patient_id": 1},
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(workout_start.status_code, 409)
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.COMPLETED)
+
         overwrite_unsaved = client.post("/assessment", data={
             "csrf_token": csrf,
             "exercise": "RIGHT_BICEP_CURL",
