@@ -5,7 +5,11 @@ from urllib.parse import urlsplit
 from dashboard.app import app
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
-from dashboard.services.authentication import hash_password, verify_password
+from dashboard.services.authentication import (
+    RUNTIME_SESSION_KEY,
+    hash_password,
+    verify_password,
+)
 from dashboard.services.password_reset import generate_password_reset_token
 
 
