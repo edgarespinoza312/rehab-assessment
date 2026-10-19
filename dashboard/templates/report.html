@@ -39,18 +39,23 @@ Assessment Report
         </div>
 
         <div class="progress-value">
-            {{ report.average_score }}%
+            {% if report.average_score is not none %}{{ report.average_score }}%{% else %}—{% endif %}
         </div>
 
+        {% if report.average_score is not none %}
         <div class="progress-bar">
             <div class="progress-fill"
                  data-progress="{{ report.average_score }}">
             </div>
         </div>
-
         <p style="margin-top:18px;opacity:.85;">
             Composite performance score generated from the completed rehabilitation assessment.
         </p>
+        {% else %}
+        <p style="margin-top:18px;opacity:.85;">
+            No score was retained in this historical record.
+        </p>
+        {% endif %}
 
     </div>
 
@@ -62,17 +67,17 @@ Assessment Report
 
         <div class="metric-card">
             <div class="metric-title">Average Score</div>
-            <div class="metric-value">{{ report.average_score }}%</div>
+            <div class="metric-value">{% if report.average_score is not none %}{{ report.average_score }}%{% else %}—{% endif %}</div>
         </div>
 
         <div class="metric-card" style="border-top:4px solid #22c55e;">
             <div class="metric-title">Best Score</div>
-            <div class="metric-value">{{ report.best_score }}%</div>
+            <div class="metric-value">{% if report.best_score is not none %}{{ report.best_score }}%{% else %}—{% endif %}</div>
         </div>
 
         <div class="metric-card" style="border-top:4px solid #ef4444;">
             <div class="metric-title">Worst Score</div>
-            <div class="metric-value">{{ report.worst_score }}%</div>
+            <div class="metric-value">{% if report.worst_score is not none %}{{ report.worst_score }}%{% else %}—{% endif %}</div>
         </div>
 
     </div>
@@ -94,14 +99,14 @@ Assessment Report
 
         <div class="metric">
             <span>Total Repetitions</span>
-            <strong>{{ report.repetitions }}</strong>
+            <strong>{% if report.repetitions is not none %}{{ report.repetitions }}{% else %}—{% endif %}</strong>
         </div>
 
         <div class="metric">
             <span>Performance Trend</span>
 
             <strong style="color:var(--primary);">
-                {{ report.trend }}
+                {% if report.trend is not none %}{{ report.trend }}{% else %}—{% endif %}
             </strong>
 
         </div>
