@@ -2047,7 +2047,7 @@ def assessment_session():
         None,
     ):
         return jsonify({"error": "forbidden"}), 403
-    context = runtime_context_for_request()
+    context = runtime_context_for_request(create=False)
     if context is None:
         return jsonify({"error": "no active runtime"}), 404
     with context.lock:
