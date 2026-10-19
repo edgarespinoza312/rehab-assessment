@@ -717,8 +717,11 @@ def reset_password(token):
         logger.exception("Unable to save a password reset")
         abort(500)
 
-    # Password changes revoke this browser session too; load_identity() rejects
-    # other sessions because their password-bound fingerprint is now stale.
+    # Revoke all runtime contexts owned by this account, including any
+    # long-lived video stream in another browser, before clearing this session.
+    # Other signed cookies are rejected on their next request by the
+    # password-bound authentication fingerprint in load_identity().
+    _release_user_runtime_contexts(user.user_id)
     logout_user()
     return redirect(url_for("login", password_reset="success"))
 
