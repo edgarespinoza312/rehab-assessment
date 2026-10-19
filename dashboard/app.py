@@ -158,6 +158,15 @@ db.init_app(app)
 migrate.init_app(app, db)
 init_auth(app)
 
+
+@app.after_request
+def protect_password_reset_responses(response):
+    """Keep token-bearing password-reset pages out of caches and referrers."""
+    if request.endpoint == "reset_password":
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
 # ==========================================================
 # Engine Initialization
 # ==========================================================
