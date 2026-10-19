@@ -118,6 +118,14 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIs(context.completed_session, completed_snapshot)
         self.assertEqual(context.lifecycle, RuntimeLifecycle.COMPLETED)
 
+    def test_direct_assessment_page_visit_does_not_create_runtime(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        with patch("dashboard.app.runtime_context_for_request", return_value=None) as get_runtime:
+            response = client.get("/assessment")
+        self.assertEqual(response.status_code, 404)
+        get_runtime.assert_called_once_with(create=False)
+
     def test_assessment_page_uses_runtime_patient_not_query_parameter(self):
         create_user(
             display_name="Clinician",
