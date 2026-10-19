@@ -58,6 +58,7 @@ Before a production deployment:
 - Set `REVALIV_ENV=production` and serve the application through HTTPS with secure cookies enabled.
 - Configure `REVALIV_PUBLIC_BASE_URL` to the actual HTTPS origin.
 - Configure and verify SMTP delivery, sender identity, TLS mode, and credential handling.
+- Configure rate limits and abuse monitoring for login and password-reset requests; the application does not currently provide a distributed rate limiter.
 - Keep all SMTP credentials and secrets out of source control and logs.
 - Review database backups, retention, access logging, deployment/rollback, and operational monitoring.
 - Resolve clinician-patient assignment policy and test isolation before using real patient records.
