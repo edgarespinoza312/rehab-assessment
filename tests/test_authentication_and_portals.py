@@ -334,10 +334,10 @@ class AuthenticationAndPortalTests(unittest.TestCase):
 
     def test_camera_stream_requires_patient_linked_runtime_session(self):
         self._login("clinician@example.test", "CLINICIAN")
-        # Opening the page directly creates a runtime but does not start an assessment.
+        # A direct page visit must not allocate an empty runtime or expose video.
         self.assertEqual(
             self.client.get("/assessment?patient_id=1").status_code,
-            200,
+            404,
         )
         self.assertEqual(self.client.get("/video_feed").status_code, 404)
         self.assertEqual(self.client.get("/video_status").status_code, 404)
