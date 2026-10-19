@@ -31,24 +31,26 @@ class AssessmentRecord(db.Model):
         nullable=False
     )
 
+    # Some pre-Alembic historical records never stored repetition counts.
     repetitions = db.Column(
         db.Integer,
-        nullable=False
+        nullable=True
     )
 
+    # Preserve a legacy single score when available; unknown values stay NULL.
     average_score = db.Column(
         db.Float,
-        nullable=False
+        nullable=True
     )
 
     best_score = db.Column(
         db.Float,
-        nullable=False
+        nullable=True
     )
 
     worst_score = db.Column(
         db.Float,
-        nullable=False
+        nullable=True
     )
 
     trend = db.Column(
