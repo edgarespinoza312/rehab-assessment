@@ -182,7 +182,7 @@ class PasswordResetTests(unittest.TestCase):
             "no-referrer",
         )
 
-    def test_resetting_another_account_closes_current_browser_runtime(self):
+    def test_resetting_another_account_preserves_current_browser_runtime(self):
         other_patient = Patient(first_name="Other", last_name="Patient")
         other_user = User(
             display_name="Other Patient",
