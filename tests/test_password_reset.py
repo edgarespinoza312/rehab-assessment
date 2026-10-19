@@ -178,6 +178,62 @@ class PasswordResetTests(unittest.TestCase):
             "no-referrer",
         )
 
+    def test_resetting_another_account_closes_current_browser_runtime(self):
+        other_patient = Patient(first_name="Other", last_name="Patient")
+        other_user = User(
+            display_name="Other Patient",
+            email="other-patient@example.test",
+            password_hash=hash_password("other original password"),
+            status="ACTIVE",
+            patient=other_patient,
+            roles=list(self.user.roles),
+        )
+        db.session.add_all([other_patient, other_user])
+        db.session.commit()
+
+        client = app.test_client()
+        client.get("/login")
+        with client.session_transaction() as state:
+            login_csrf = state["revaliv_csrf_token"]
+        response = client.post("/login", data={
+            "csrf_token": login_csrf,
+            "email": "other-patient@example.test",
+            "password": "other original password",
+            "role": "PATIENT",
+        })
+        self.assertEqual(response.status_code, 302)
+
+        with client.session_transaction() as state:
+            assessment_csrf = state["revaliv_csrf_token"]
+        started = client.post("/assessment", data={
+            "csrf_token": assessment_csrf,
+            "exercise": "LEFT_BICEP_CURL",
+            "patient_id": other_patient.patient_id,
+        })
+        self.assertEqual(started.status_code, 302)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+        self.assertIsNotNone(runtime_registry.get(runtime_id))
+
+        # A valid reset link can be opened while a different account is signed in.
+        token = generate_password_reset_token(self.user)
+        reset_path = f"/reset-password/{token}"
+        self.assertEqual(client.get(reset_path).status_code, 200)
+        with client.session_transaction() as state:
+            reset_csrf = state["revaliv_csrf_token"]
+        response = client.post(reset_path, data={
+            "csrf_token": reset_csrf,
+            "password": "updated secure password",
+            "confirm_password": "updated secure password",
+        })
+        self.assertEqual(response.status_code, 302)
+
+        self.assertIsNone(runtime_registry.get(runtime_id))
+        self.assertEqual(client.get("/patient").status_code, 302)
+        db.session.expire_all()
+        target_user = db.session.get(User, self.user_id)
+        self.assertTrue(verify_password(target_user, "updated secure password"))
+
     def test_invalid_and_expired_tokens_are_rejected(self):
         bad_link = self.client.get("/reset-password/not-a-valid-token")
         self.assertEqual(bad_link.status_code, 400)
