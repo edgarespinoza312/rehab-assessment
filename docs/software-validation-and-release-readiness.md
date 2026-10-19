@@ -18,6 +18,12 @@ The default pose backend remains MediaPipe. The YOLO/TensorRT backend is opt-in 
 - A regression test covers invalidation of the resetting browser and a second browser session.
 - The current review branch has automated CI; use the latest branch Actions result, not a result from an earlier commit, as the merge gate.
 
+## Database migration behavior
+
+The CI workflow now checks both an empty file-backed database upgrade and the full test suite on Python 3.10 and 3.11. The base migration bootstraps the legacy patient/assessment tables when absent. For older assessment rows that have a single `score` field, it carries that value into `average_score`; it does not infer repetitions, best score, or worst score, so those fields remain unknown. The patient profile and report display unknown values as unavailable instead of as zero or fabricated measurements.
+
+The follow-up migration allows these historical fields to be nullable in databases that were already upgraded under the earlier schema. Its downgrade refuses to reinstate `NOT NULL` constraints while unknown values remain, rather than inventing replacement values.
+
 ## Release blockers or decisions still open
 
 ### Clinician-to-patient authorization scope
