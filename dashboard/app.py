@@ -1830,6 +1830,10 @@ def start_assessment():
             and context.workout_runtime.active
         ):
             return jsonify({"error": "a workout session is already active"}), 409
+        if context.session is not None or context.completed_session is not None:
+            return jsonify({
+                "error": "finish, save, or discard the current assessment first"
+            }), 409
         context.session = new_session
         context.transition(RuntimeLifecycle.ACTIVE)
         context.runtime_mode = RuntimeMode.LEGACY_ASSESSMENT.value
