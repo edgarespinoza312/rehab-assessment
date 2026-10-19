@@ -92,9 +92,11 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertEqual(duplicate_start.status_code, 409)
         self.assertIs(context.session, original_session)
         self.assertIsNone(context.completed_session)
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.ACTIVE)
 
         finish = client.post("/finish", data={"csrf_token": csrf})
         self.assertEqual(finish.status_code, 302)
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.COMPLETED)
         completed_snapshot = context.completed_session
         self.assertIsNotNone(completed_snapshot)
 
@@ -106,6 +108,7 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertEqual(overwrite_unsaved.status_code, 409)
         self.assertIs(context.session, original_session)
         self.assertIs(context.completed_session, completed_snapshot)
+        self.assertEqual(context.lifecycle, RuntimeLifecycle.COMPLETED)
 
     def test_unavailable_camera_returns_503_and_releases_video_lease(self):
         client = app.test_client()
