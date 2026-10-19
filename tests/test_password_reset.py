@@ -218,8 +218,10 @@ class PasswordResetTests(unittest.TestCase):
         with client.session_transaction() as state:
             runtime_id = state[RUNTIME_SESSION_KEY]
         self.assertIsNotNone(runtime_registry.get(runtime_id))
+        self.addCleanup(_release_runtime_context, runtime_id)
 
-        # A valid reset link can be opened while a different account is signed in.
+        # Resetting account A from account B's browser must not log out B or
+        # destroy B's active runtime; only account A's sessions are revoked.
         token = generate_password_reset_token(self.user)
         reset_path = f"/reset-password/{token}"
         self.assertEqual(client.get(reset_path).status_code, 200)
@@ -232,8 +234,8 @@ class PasswordResetTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 302)
 
-        self.assertIsNone(runtime_registry.get(runtime_id))
-        self.assertEqual(client.get("/patient").status_code, 302)
+        self.assertIsNotNone(runtime_registry.get(runtime_id))
+        self.assertEqual(client.get("/patient").status_code, 200)
         db.session.expire_all()
         target_user = db.session.get(User, self.user_id)
         self.assertTrue(verify_password(target_user, "updated secure password"))
