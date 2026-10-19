@@ -2047,22 +2047,19 @@ def assessment_session():
         None,
     ):
         return jsonify({"error": "forbidden"}), 403
-    patient_id = request.args.get("patient_id", type=int)
-    if any(role.value == "PATIENT" for role in identity.roles) and not any(
-        role.value == "CLINICIAN" for role in identity.roles
-    ):
-        if identity.patient_id is None:
-            return jsonify({"error": "patient profile is not linked"}), 403
-        patient_id = identity.patient_id
-
-
     context = runtime_context_for_request()
     if context is None:
         return jsonify({"error": "no active runtime"}), 404
     with context.lock:
-        patient_access_error = _require_runtime_patient_access(
-            patient_id
+        # The active runtime, not a query-string patient_id, owns the assessment.
+        patient_id = (
+            context.session.patient_id
+            if context.session is not None
+            else _active_runtime_patient_id(context)
         )
+        if patient_id is None:
+            return jsonify({"error": "no active patient-linked assessment"}), 404
+        patient_access_error = _require_runtime_patient_access(patient_id)
         if patient_access_error is not None:
             return patient_access_error
         active_session = context.session
