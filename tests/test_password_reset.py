@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
-from dashboard.app import app
+from dashboard.app import app, runtime_registry, _release_runtime_context
 from dashboard.database import db
 from dashboard.models import Patient, Role, User
 from dashboard.services.authentication import (
