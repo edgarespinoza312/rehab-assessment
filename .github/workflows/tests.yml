@@ -38,5 +38,38 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest
+      - name: Smoke-test full database migrations
+        env:
+          REVALIV_DATABASE_URI: sqlite:////tmp/revaliv-migration-smoke.sqlite
+        run: |
+          rm -f /tmp/revaliv-migration-smoke.sqlite
+          python - <<'PY'
+          from sqlalchemy import inspect
+          from dashboard.app import app
+          from dashboard.database import db
+
+          expected_tables = {
+              "patients",
+              "assessment_records",
+              "users",
+              "roles",
+              "user_roles",
+              "workout_plans",
+              "workout_plan_exercises",
+              "workout_sessions",
+              "workout_exercise_results",
+              "progression_review_events",
+          }
+
+          with app.app_context():
+              actual_tables = set(inspect(db.engine).get_table_names())
+              missing_tables = sorted(expected_tables - actual_tables)
+              if missing_tables:
+                  raise SystemExit(
+                      "Migration smoke test is missing tables: "
+                      + ", ".join(missing_tables)
+                  )
+              print("Alembic upgrade created all required tables.")
+          PY
       - name: Run tests
         run: python -m pytest -q
