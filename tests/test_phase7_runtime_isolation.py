@@ -72,6 +72,41 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 302)
 
+    def test_new_assessment_cannot_overwrite_active_or_unsaved_assessment(self):
+        client = app.test_client()
+        self._login(client, "a@example.test", "password-a")
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+            csrf = state["revaliv_csrf_token"]
+        self.addCleanup(_release_runtime_context, runtime_id)
+
+        context = runtime_registry.get(runtime_id)
+        self.assertIsNotNone(context)
+        original_session = context.session
+        duplicate_start = client.post("/assessment", data={
+            "csrf_token": csrf,
+            "exercise": "RIGHT_BICEP_CURL",
+            "patient_id": 1,
+        })
+        self.assertEqual(duplicate_start.status_code, 409)
+        self.assertIs(context.session, original_session)
+        self.assertIsNone(context.completed_session)
+
+        finish = client.post("/finish", data={"csrf_token": csrf})
+        self.assertEqual(finish.status_code, 302)
+        completed_snapshot = context.completed_session
+        self.assertIsNotNone(completed_snapshot)
+
+        overwrite_unsaved = client.post("/assessment", data={
+            "csrf_token": csrf,
+            "exercise": "RIGHT_BICEP_CURL",
+            "patient_id": 1,
+        })
+        self.assertEqual(overwrite_unsaved.status_code, 409)
+        self.assertIs(context.session, original_session)
+        self.assertIs(context.completed_session, completed_snapshot)
+
     def test_unavailable_camera_returns_503_and_releases_video_lease(self):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
