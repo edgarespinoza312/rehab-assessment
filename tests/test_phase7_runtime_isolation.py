@@ -118,6 +118,31 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIs(context.completed_session, completed_snapshot)
         self.assertEqual(context.lifecycle, RuntimeLifecycle.COMPLETED)
 
+    def test_assessment_page_uses_runtime_patient_not_query_parameter(self):
+        create_user(
+            display_name="Clinician",
+            email="clinician-context@example.test",
+            password="password-clinician",
+            role="CLINICIAN",
+        )
+        client = app.test_client()
+        self._login(
+            client,
+            "clinician-context@example.test",
+            "password-clinician",
+            role="CLINICIAN",
+        )
+        self._start_assessment(client, 1)
+        with client.session_transaction() as state:
+            runtime_id = state[RUNTIME_SESSION_KEY]
+        self.addCleanup(_release_runtime_context, runtime_id)
+
+        response = client.get("/assessment?patient_id=2")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn('href="/selection?patient_id=1"', body)
+        self.assertNotIn('href="/selection?patient_id=2"', body)
+
     def test_unavailable_camera_returns_503_and_releases_video_lease(self):
         client = app.test_client()
         self._login(client, "a@example.test", "password-a")
