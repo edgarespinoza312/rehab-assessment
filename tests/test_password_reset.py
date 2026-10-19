@@ -109,6 +109,43 @@ class PasswordResetTests(unittest.TestCase):
         })
         self.assertEqual(login.status_code, 302)
 
+    def test_password_reset_invalidates_current_and_other_sessions(self):
+        clients = [self.client, app.test_client()]
+        for client in clients:
+            client.get("/login")
+            with client.session_transaction() as state:
+                csrf = state["revaliv_csrf_token"]
+            response = client.post("/login", data={
+                "csrf_token": csrf,
+                "email": "reset-patient@example.test",
+                "password": "original password",
+                "role": "PATIENT",
+            })
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(client.get("/patient").status_code, 200)
+
+        with patch("dashboard.app.send_password_reset_email") as send_email:
+            response = self.submit_reset_request(
+                "reset-patient@example.test",
+                self.csrf(),
+            )
+        self.assertEqual(response.status_code, 200)
+        reset_path = urlsplit(send_email.call_args.args[1]).path
+        self.assertEqual(self.client.get(reset_path).status_code, 200)
+        with self.client.session_transaction() as state:
+            reset_csrf = state["revaliv_csrf_token"]
+        response = self.client.post(reset_path, data={
+            "csrf_token": reset_csrf,
+            "password": "updated secure password",
+            "confirm_password": "updated secure password",
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # The resetting browser is explicitly logged out, and the second
+        # browser's still-signed cookie is invalidated by its stale fingerprint.
+        self.assertEqual(self.client.get("/patient").status_code, 302)
+        self.assertEqual(clients[1].get("/patient").status_code, 302)
+
     def test_invalid_and_expired_tokens_are_rejected(self):
         bad_link = self.client.get("/reset-password/not-a-valid-token")
         self.assertEqual(bad_link.status_code, 400)
