@@ -168,6 +168,16 @@ class PasswordResetTests(unittest.TestCase):
         for runtime_id in runtime_ids:
             self.assertIsNone(runtime_registry.get(runtime_id))
 
+    def test_reset_page_disables_caching_and_referrer_disclosure(self):
+        token = generate_password_reset_token(self.user)
+        response = self.client.get(f"/reset-password/{token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response.headers.get("Cache-Control", ""))
+        self.assertEqual(
+            response.headers.get("Referrer-Policy"),
+            "no-referrer",
+        )
+
     def test_invalid_and_expired_tokens_are_rejected(self):
         bad_link = self.client.get("/reset-password/not-a-valid-token")
         self.assertEqual(bad_link.status_code, 400)
