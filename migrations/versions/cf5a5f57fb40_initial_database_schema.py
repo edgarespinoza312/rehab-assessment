@@ -15,11 +15,12 @@ depends_on = None
 
 
 def upgrade():
-    """Bootstrap legacy patient tables, then migrate their assessment fields.
+    """Bootstrap core tables and preserve values from the legacy score schema.
 
-    The application historically created its two core tables before Alembic was
-    introduced. A fresh file-based database has no such tables, so bootstrap
-    them when absent. Existing tables are left intact and upgraded in place.
+    Patient and assessment tables predate Alembic in some Revaliv installations.
+    New databases need both tables created here; existing databases are inspected
+    and altered in place. Historical single-score rows are retained as
+    average_score, while fields that were never recorded remain unknown (NULL).
     """
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -56,34 +57,68 @@ def upgrade():
             sa.Column("created_at", sa.DateTime(), nullable=True),
         )
 
-    column_names = {
+    existing_columns = {
         column["name"]
         for column in sa.inspect(bind).get_columns("assessment_records")
     }
     additions = (
-        ("repetitions", sa.Column("repetitions", sa.Integer(), nullable=False)),
-        ("average_score", sa.Column("average_score", sa.Float(), nullable=False)),
-        ("best_score", sa.Column("best_score", sa.Float(), nullable=False)),
-        ("worst_score", sa.Column("worst_score", sa.Float(), nullable=False)),
+        ("repetitions", sa.Column("repetitions", sa.Integer(), nullable=True)),
+        ("average_score", sa.Column("average_score", sa.Float(), nullable=True)),
+        ("best_score", sa.Column("best_score", sa.Float(), nullable=True)),
+        ("worst_score", sa.Column("worst_score", sa.Float(), nullable=True)),
         ("trend", sa.Column("trend", sa.String(length=50), nullable=True)),
     )
-    needs_changes = any(name not in column_names for name, _ in additions) or (
-        "score" in column_names
-    )
-    if needs_changes:
+    missing = [(name, column) for name, column in additions if name not in existing_columns]
+    if missing:
         with op.batch_alter_table("assessment_records", schema=None) as batch_op:
-            for name, column in additions:
-                if name not in column_names:
-                    batch_op.add_column(column)
-            if "score" in column_names:
-                batch_op.drop_column("score")
+            for _name, column in missing:
+                batch_op.add_column(column)
+
+    current_columns = {
+        column["name"]
+        for column in sa.inspect(bind).get_columns("assessment_records")
+    }
+    if "score" in current_columns:
+        if "average_score" in current_columns:
+            op.execute(sa.text(
+                "UPDATE assessment_records "
+                "SET average_score = score "
+                "WHERE average_score IS NULL AND score IS NOT NULL"
+            ))
+        with op.batch_alter_table("assessment_records", schema=None) as batch_op:
+            batch_op.drop_column("score")
 
 
 def downgrade():
-    with op.batch_alter_table("assessment_records", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("score", sa.Float(), nullable=True))
-        batch_op.drop_column("trend")
-        batch_op.drop_column("worst_score")
-        batch_op.drop_column("best_score")
-        batch_op.drop_column("average_score")
-        batch_op.drop_column("repetitions")
+    bind = op.get_bind()
+    columns = {
+        column["name"]
+        for column in sa.inspect(bind).get_columns("assessment_records")
+    }
+    if "score" not in columns:
+        with op.batch_alter_table("assessment_records", schema=None) as batch_op:
+            batch_op.add_column(sa.Column("score", sa.Float(), nullable=True))
+
+    current_columns = {
+        column["name"]
+        for column in sa.inspect(bind).get_columns("assessment_records")
+    }
+    if "average_score" in current_columns and "score" in current_columns:
+        op.execute(sa.text(
+            "UPDATE assessment_records "
+            "SET score = average_score "
+            "WHERE score IS NULL AND average_score IS NOT NULL"
+        ))
+
+    current_columns = {
+        column["name"]
+        for column in sa.inspect(bind).get_columns("assessment_records")
+    }
+    removable = [
+        name for name in ("trend", "worst_score", "best_score", "average_score", "repetitions")
+        if name in current_columns
+    ]
+    if removable:
+        with op.batch_alter_table("assessment_records", schema=None) as batch_op:
+            for name in removable:
+                batch_op.drop_column(name)
