@@ -1363,33 +1363,31 @@ def patient_profile(patient_id):
     assessment_count = len(assessments)
 
     if assessment_count > 0:
-
-        average_score = round(
-            sum(
-                assessment.average_score
-                for assessment in assessments
-            ) / assessment_count,
-            1
+        recorded_average_scores = [
+            assessment.average_score
+            for assessment in assessments
+            if assessment.average_score is not None
+        ]
+        recorded_best_scores = [
+            assessment.best_score
+            for assessment in assessments
+            if assessment.best_score is not None
+        ]
+        average_score = (
+            round(sum(recorded_average_scores) / len(recorded_average_scores), 1)
+            if recorded_average_scores
+            else None
         )
-
-        best_score = round(
-            max(
-                assessment.best_score
-                for assessment in assessments
-            ),
-            1
+        best_score = (
+            round(max(recorded_best_scores), 1)
+            if recorded_best_scores
+            else None
         )
 
         latest_assessment = assessments[0]
-
-        latest_date = latest_assessment.created_at.strftime(
-            "%B %d, %Y"
-        )
-
+        latest_date = latest_assessment.created_at.strftime("%B %d, %Y")
         recovery_trend = latest_assessment.trend
-
     else:
-
         average_score = None
         best_score = None
         latest_date = "No assessments yet"
