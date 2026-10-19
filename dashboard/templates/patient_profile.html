@@ -640,11 +640,11 @@
                     {% for assessment in assessments %}<tr>
                         <td>{{ assessment.created_at.strftime("%B %d, %Y") }}</td>
                         <td>{{ assessment.exercise }}</td>
-                        <td>{{ assessment.repetitions }}</td>
-                        <td>{{ assessment.average_score }}%</td>
-                        <td>{{ assessment.best_score }}%</td>
-                        <td>{{ assessment.worst_score }}%</td>
-                        <td>{{ assessment.trend }}</td>
+                        <td>{% if assessment.repetitions is not none %}{{ assessment.repetitions }}{% else %}—{% endif %}</td>
+                        <td>{% if assessment.average_score is not none %}{{ assessment.average_score }}%{% else %}—{% endif %}</td>
+                        <td>{% if assessment.best_score is not none %}{{ assessment.best_score }}%{% else %}—{% endif %}</td>
+                        <td>{% if assessment.worst_score is not none %}{{ assessment.worst_score }}%{% else %}—{% endif %}</td>
+                        <td>{% if assessment.trend is not none %}{{ assessment.trend }}{% else %}—{% endif %}</td>
                         <td>
                             <div class="actions"><a class="small-btn"
                                     href="{{ url_for('view_assessment', assessment_id=assessment.assessment_id) }}">View</a>
