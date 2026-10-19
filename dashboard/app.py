@@ -1818,12 +1818,6 @@ def start_assessment():
     )
     context = runtime_context_for_request()
     with context.lock:
-        if context.lifecycle in {
-            RuntimeLifecycle.COMPLETED,
-            RuntimeLifecycle.CANCELLED,
-            RuntimeLifecycle.EXPIRED,
-        }:
-            context.lifecycle = RuntimeLifecycle.CREATED
         if (
             context.runtime_mode == RuntimeMode.WORKOUT_SESSION.value
             and context.workout_runtime is not None
@@ -1834,6 +1828,12 @@ def start_assessment():
             return jsonify({
                 "error": "finish, save, or discard the current assessment first"
             }), 409
+        if context.lifecycle in {
+            RuntimeLifecycle.COMPLETED,
+            RuntimeLifecycle.CANCELLED,
+            RuntimeLifecycle.EXPIRED,
+        }:
+            context.lifecycle = RuntimeLifecycle.CREATED
         context.session = new_session
         context.transition(RuntimeLifecycle.ACTIVE)
         context.runtime_mode = RuntimeMode.LEGACY_ASSESSMENT.value
@@ -1913,12 +1913,6 @@ def start_workout():
 
     context = runtime_context_for_request()
     with context.lock:
-        if context.lifecycle in {
-            RuntimeLifecycle.COMPLETED,
-            RuntimeLifecycle.CANCELLED,
-            RuntimeLifecycle.EXPIRED,
-        }:
-            context.lifecycle = RuntimeLifecycle.CREATED
         if context.session is not None or context.completed_session is not None:
             return jsonify({"error": "finish or save the legacy assessment first"}), 409
         if (
@@ -1927,6 +1921,12 @@ def start_workout():
             and context.workout_runtime.active
         ):
             return jsonify({"error": "a workout session is already active"}), 409
+        if context.lifecycle in {
+            RuntimeLifecycle.COMPLETED,
+            RuntimeLifecycle.CANCELLED,
+            RuntimeLifecycle.EXPIRED,
+        }:
+            context.lifecycle = RuntimeLifecycle.CREATED
         def reset_pipeline(side):
             _reset_workout_pipeline_locked(side, context)
         adapter = WorkoutRuntimeAdapter(
