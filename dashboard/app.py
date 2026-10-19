@@ -711,8 +711,24 @@ def reset_password(token):
             error="Passwords do not match.",
         ), 400
 
+    validated_password_hash = user.password_hash
     try:
-        user.password_hash = hash_password(password)
+        new_password_hash = hash_password(password)
+        updated_rows = User.query.filter(
+            User.user_id == user.user_id,
+            User.status == "ACTIVE",
+            User.password_hash == validated_password_hash,
+        ).update(
+            {User.password_hash: new_password_hash},
+            synchronize_session=False,
+        )
+        if updated_rows != 1:
+            db.session.rollback()
+            return render_template(
+                "reset_password.html",
+                invalid=True,
+                error=None,
+            ), 400
         db.session.commit()
     except ValueError as error:
         db.session.rollback()

@@ -282,5 +282,41 @@ class PasswordResetTests(unittest.TestCase):
         send_email.assert_not_called()
 
 
+
+    def test_reset_rejects_token_if_password_changes_after_validation(self):
+        token = generate_password_reset_token(self.user)
+        reset_path = f"/reset-password/{token}"
+        self.assertEqual(self.client.get(reset_path).status_code, 200)
+        with self.client.session_transaction() as state:
+            csrf = state["revaliv_csrf_token"]
+
+        competing_password_hash = hash_password("competing password")
+
+        def simulate_competing_reset(_password):
+            # Simulate another request consuming the token after this request
+            # validates it but before its conditional password update.
+            db.session.query(User).filter_by(user_id=self.user_id).update(
+                {"password_hash": competing_password_hash},
+                synchronize_session=False,
+            )
+            db.session.commit()
+            return hash_password("submitted password")
+
+        with patch(
+            "dashboard.app.hash_password",
+            side_effect=simulate_competing_reset,
+        ):
+            response = self.client.post(reset_path, data={
+                "csrf_token": csrf,
+                "password": "submitted password",
+                "confirm_password": "submitted password",
+            })
+
+        self.assertEqual(response.status_code, 400)
+        db.session.expire_all()
+        user = db.session.get(User, self.user_id)
+        self.assertTrue(verify_password(user, "competing password"))
+        self.assertFalse(verify_password(user, "submitted password"))
+
 if __name__ == "__main__":
     unittest.main()
