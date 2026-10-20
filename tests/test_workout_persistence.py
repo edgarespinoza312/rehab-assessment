@@ -222,7 +222,7 @@ class WorkoutPersistenceTests(unittest.TestCase):
                 ExerciseState(rep_completed=True),
                 result,
             ))
-            if index == 0:
+            if index < len(plan.exercises) - 1:
                 engine.advance()
                 engine.begin_next_calibration()
         engine.advance()
