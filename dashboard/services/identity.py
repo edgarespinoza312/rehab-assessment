@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from dashboard.models import User
+from dashboard.models import PatientAssignment, User
 
 
 class UserStatus(str, Enum):
@@ -91,7 +91,17 @@ def identity_from_user(user: User) -> IdentityContext:
 
 
 class AuthorizationService:
-    """Central policy boundary; authentication remains outside this service."""
+    """Central policy boundary; clinical access requires an active assignment."""
+
+    @staticmethod
+    def _has_active_assignment(identity: IdentityContext, patient_id: int) -> bool:
+        if identity.is_trusted_development_identity:
+            return True
+        return PatientAssignment.query.filter_by(
+            patient_id=patient_id,
+            clinician_user_id=identity.user_id,
+            ended_at=None,
+        ).first() is not None
 
     @staticmethod
     def can(
@@ -130,16 +140,6 @@ class AuthorizationService:
                 and identity.patient_id == patient_id
             )
 
-        if capability == Capability.VIEW_PATIENT_PROGRESSION:
-            return (
-                (
-                    patient_role
-                    and patient_id is not None
-                    and identity.patient_id == patient_id
-                )
-                or (clinician_role and patient_id is not None)
-            )
-
         if capability == Capability.ACCESS_CLINICIAN_PORTAL:
             return clinician_role
 
@@ -147,20 +147,18 @@ class AuthorizationService:
             return ApplicationRole.ADMIN in identity.roles
 
         if capability in {
-            Capability.DELETE_PATIENT_RECORD,
-            Capability.DELETE_ASSESSMENT_RECORD,
-        }:
-            return clinician_role and patient_id is not None
-
-        if capability in {
             Capability.VIEW_ASSIGNED_PATIENT,
             Capability.VIEW_PATIENT_PROGRESSION,
             Capability.VIEW_ADVISORY,
             Capability.REVIEW_ADVISORY,
+            Capability.DELETE_PATIENT_RECORD,
+            Capability.DELETE_ASSESSMENT_RECORD,
         }:
-            # Assignment/organization policy is intentionally deferred. In
-            # the trusted prototype, CLINICIAN is the explicit capability.
-            return clinician_role and patient_id is not None
+            return (
+                clinician_role
+                and patient_id is not None
+                and AuthorizationService._has_active_assignment(identity, patient_id)
+            )
 
         return False
 
