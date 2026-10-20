@@ -290,6 +290,23 @@ class Phase7FAuthenticationTests(unittest.TestCase):
         self.assertEqual(self.login(admin, "admin@example.test", "ADMIN").status_code, 302)
         self.assertEqual(admin.get("/admin/accounts").status_code, 200)
 
+    def test_admin_accounts_page_has_csrf_protected_logout_action(self):
+        client = app.test_client()
+        self.login(client, "admin@example.test", "ADMIN")
+
+        response = client.get("/admin/accounts")
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('action="/logout"', html)
+        self.assertIn(">Log out</button>", html)
+
+        logout_response = client.post(
+            "/logout",
+            data={"csrf_token": self.csrf(client)},
+        )
+        self.assertEqual(logout_response.status_code, 302)
+        self.assertEqual(client.get("/admin/accounts").status_code, 302)
+
     def test_operator_cannot_be_provisioned_until_its_policy_is_defined(self):
         admin = app.test_client()
         self.login(admin, "admin@example.test", "ADMIN")
