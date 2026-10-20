@@ -1115,12 +1115,13 @@ def new_patient():
         )
 
         db.session.add(patient)
+        db.session.flush()
+        db.session.add(PatientAssignment(
+            patient_id=patient.patient_id,
+            clinician_user_id=identity.user_id,
+            assigned_by_user_id=identity.user_id,
+        ))
         db.session.commit()
-        try:
-            assign_patient(patient.patient_id, identity.user_id, identity.user_id)
-        except AssignmentError:
-            db.session.rollback()
-            raise
 
         return redirect(
             url_for("patient_registry", filter="assigned")
