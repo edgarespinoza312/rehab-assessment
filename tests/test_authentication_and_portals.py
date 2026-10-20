@@ -2,7 +2,7 @@ import unittest
 
 from dashboard.app import app
 from dashboard.database import db
-from dashboard.models import AssessmentRecord, Patient, Role, User
+from dashboard.models import AssessmentRecord, Patient, PatientAssignment, Role, User
 from dashboard.services.authentication import hash_password
 
 
@@ -40,7 +40,29 @@ class AuthenticationAndPortalTests(unittest.TestCase):
             password_hash=hash_password("correct horse"),
         )
         admin.roles = [Role(name="ADMIN")]
-        db.session.add_all([patient, other_patient, clinician, patient_user, operator, admin])
+        other_clinician = User(
+            display_name="Other Clinician",
+            email="other-clinician@example.test",
+            password_hash=hash_password("correct horse"),
+        )
+        other_clinician.roles = [Role(name="CLINICIAN")]
+        db.session.add_all([
+            patient, other_patient, clinician, patient_user, operator, admin,
+            other_clinician,
+        ])
+        db.session.flush()
+        db.session.add_all([
+            PatientAssignment(
+                patient_id=patient.patient_id,
+                clinician_user_id=clinician.user_id,
+                assigned_by_user_id=clinician.user_id,
+            ),
+            PatientAssignment(
+                patient_id=other_patient.patient_id,
+                clinician_user_id=clinician.user_id,
+                assigned_by_user_id=clinician.user_id,
+            ),
+        ])
         db.session.commit()
         self.client = app.test_client()
 
@@ -498,6 +520,81 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         )
         self.assertEqual(deleted_patient.status_code, 302)
         self.assertIsNone(db.session.get(Patient, 2))
+
+
+    def test_unassigned_clinician_must_claim_patient_before_clinical_access(self):
+        patient = Patient(
+            first_name="Third",
+            last_name="Patient",
+            diagnosis="Sensitive diagnosis",
+            affected_side="Left",
+        )
+        db.session.add(patient)
+        db.session.commit()
+        patient_id = patient.patient_id
+
+        self._login("clinician@example.test", "CLINICIAN")
+        self.assertEqual(self.client.get(f"/patients/{patient_id}").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/patients/{patient_id}/progression").status_code,
+            403,
+        )
+        directory = self.client.get("/patients?filter=available")
+        self.assertEqual(directory.status_code, 200)
+        html = directory.get_data(as_text=True)
+        self.assertIn("Third Patient", html)
+        self.assertNotIn("Sensitive diagnosis", html)
+
+        claimed = self.client.post(
+            f"/patients/{patient_id}/assignment",
+            data={
+                "csrf_token": self._csrf(),
+                "action": "claim",
+                "filter": "available",
+            },
+        )
+        self.assertEqual(claimed.status_code, 302)
+        assignment = PatientAssignment.query.filter_by(
+            patient_id=patient_id,
+            ended_at=None,
+        ).one()
+        self.assertEqual(assignment.clinician_user_id, User.query.filter_by(
+            email="clinician@example.test"
+        ).one().user_id)
+        self.assertEqual(self.client.get(f"/patients/{patient_id}").status_code, 200)
+
+    def test_admin_reassignment_closes_prior_assignment_and_preserves_history(self):
+        original = PatientAssignment.query.filter_by(
+            patient_id=1,
+            ended_at=None,
+        ).one()
+        next_clinician = User.query.filter_by(
+            email="other-clinician@example.test"
+        ).one()
+        self._login("admin@example.test", "ADMIN")
+        response = self.client.post(
+            "/patients/1/assignment",
+            data={
+                "csrf_token": self._csrf(),
+                "action": "assign",
+                "clinician_user_id": str(next_clinician.user_id),
+                "reason": "Coverage change",
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        db.session.refresh(original)
+        self.assertIsNotNone(original.ended_at)
+        self.assertEqual(original.end_reason, "Coverage change")
+        self.assertEqual(original.ended_by_user_id, User.query.filter_by(
+            email="admin@example.test"
+        ).one().user_id)
+        active = PatientAssignment.query.filter_by(
+            patient_id=1,
+            ended_at=None,
+        ).one()
+        self.assertEqual(active.clinician_user_id, next_clinician.user_id)
+        self.assertEqual(PatientAssignment.query.filter_by(patient_id=1).count(), 2)
 
     def test_clinician_patient_profile_alias_reaches_protected_profile(self):
         self._login("clinician@example.test", "CLINICIAN")
