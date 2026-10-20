@@ -15,37 +15,41 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         db.create_all()
         patient = Patient(patient_id=1, first_name="Pat", last_name="User")
         other_patient = Patient(patient_id=2, first_name="Other", last_name="Patient")
+        clinician_role = Role(name="CLINICIAN")
+        patient_role = Role(name="PATIENT")
+        operator_role = Role(name="OPERATOR")
+        admin_role = Role(name="ADMIN")
         clinician = User(
             display_name="Clinician",
             email="clinician@example.test",
             password_hash=hash_password("correct horse"),
         )
-        clinician.roles = [Role(name="CLINICIAN")]
+        clinician.roles = [clinician_role]
         patient_user = User(
             display_name="Patient",
             email="patient@example.test",
             password_hash=hash_password("correct horse"),
             patient=patient,
         )
-        patient_user.roles = [Role(name="PATIENT")]
+        patient_user.roles = [patient_role]
         operator = User(
             display_name="Operator",
             email="operator@example.test",
             password_hash=hash_password("correct horse"),
         )
-        operator.roles = [Role(name="OPERATOR")]
+        operator.roles = [operator_role]
         admin = User(
             display_name="Admin",
             email="admin@example.test",
             password_hash=hash_password("correct horse"),
         )
-        admin.roles = [Role(name="ADMIN")]
+        admin.roles = [admin_role]
         other_clinician = User(
             display_name="Other Clinician",
             email="other-clinician@example.test",
             password_hash=hash_password("correct horse"),
         )
-        other_clinician.roles = [Role(name="CLINICIAN")]
+        other_clinician.roles = [clinician_role]
         db.session.add_all([
             patient, other_patient, clinician, patient_user, operator, admin,
             other_clinician,
