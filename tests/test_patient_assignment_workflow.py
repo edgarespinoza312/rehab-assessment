@@ -43,7 +43,7 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
             email="clinician2@workflow.test",
             password_hash=hash_password("correct horse"),
             status="ACTIVE",
-            roles=[Role(name="CLINICIAN")],
+            roles=[clinician_role],
         )
         db.session.add_all([
             patient, self.admin, self.clinician_one, self.clinician_two,
