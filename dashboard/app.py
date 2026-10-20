@@ -1179,7 +1179,16 @@ def selection():
     if patient_role and not clinician_role:
         patients = [db.session.get(Patient, identity.patient_id)]
     else:
-        patients = Patient.query.order_by(
+        assigned_patient_ids = [
+            assignment.patient_id
+            for assignment in PatientAssignment.query.filter_by(
+                clinician_user_id=identity.user_id,
+                ended_at=None,
+            ).all()
+        ]
+        patients = Patient.query.filter(
+            Patient.patient_id.in_(assigned_patient_ids)
+        ).order_by(
             Patient.last_name,
             Patient.first_name,
         ).all()
@@ -1230,7 +1239,16 @@ def workout_builder():
     if patient_role and not clinician_role:
         patients = [db.session.get(Patient, identity.patient_id)]
     else:
-        patients = Patient.query.order_by(
+        assigned_patient_ids = [
+            assignment.patient_id
+            for assignment in PatientAssignment.query.filter_by(
+                clinician_user_id=identity.user_id,
+                ended_at=None,
+            ).all()
+        ]
+        patients = Patient.query.filter(
+            Patient.patient_id.in_(assigned_patient_ids)
+        ).order_by(
             Patient.last_name,
             Patient.first_name,
         ).all()
