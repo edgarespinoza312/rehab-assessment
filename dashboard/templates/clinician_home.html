@@ -1,13 +1,32 @@
 {% extends "base.html" %}
 {% block title %}Clinician Portal | Revaliv{% endblock %}
 {% block content %}
-<section class="card">
-    <h1>Clinician Portal</h1>
-    <p>Patient profiles, progression, advisory evidence, and review history.</p>
-    <p><a href="{{ url_for('patient_registry') }}">Patients</a></p>
-    <form method="post" action="{{ url_for('logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit">Log out</button>
-    </form>
+<section class="clinician-dashboard">
+    <header class="clinician-page-header">
+        <div>
+            <p class="clinician-eyebrow">CLINICAL WORKSPACE</p>
+            <h1>Clinician portal</h1>
+            <p class="clinician-intro">Manage your patient relationships and review rehabilitation progress from one place.</p>
+        </div>
+        <form class="clinician-logout" method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-secondary" type="submit">Log out</button>
+        </form>
+    </header>
+
+    <section class="clinician-workspace-card">
+        <div class="clinician-workspace-icon" aria-hidden="true">P</div>
+        <div class="clinician-workspace-copy">
+            <p class="clinician-card-kicker">PATIENT WORKSPACE</p>
+            <h2>Patient directory</h2>
+            <p>Open the directory to review patient profiles and access records within your assigned clinical scope.</p>
+            <a class="btn btn-primary" href="{{ url_for('patient_registry') }}">Open patient directory <span aria-hidden="true">→</span></a>
+        </div>
+    </section>
+
+    <aside class="clinician-access-note">
+        <span class="clinician-access-mark" aria-hidden="true">i</span>
+        <p><strong>Access is assignment-based.</strong> Clinical records are available according to your patient assignments. If a patient is not assigned to you, use the directory's available assignment workflow where applicable.</p>
+    </aside>
 </section>
 {% endblock %}
