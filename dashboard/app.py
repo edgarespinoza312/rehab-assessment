@@ -1357,10 +1357,17 @@ def patient_registry():
     if selected_filter not in {"all", "assigned", "available"}:
         selected_filter = "assigned" if is_clinician and not is_admin else "all"
 
+    assignment_history_rows = PatientAssignment.query.order_by(
+        PatientAssignment.assigned_at.desc()
+    ).all()
     assignments = {
         assignment.patient_id: assignment
-        for assignment in PatientAssignment.query.filter_by(ended_at=None).all()
+        for assignment in assignment_history_rows
+        if assignment.ended_at is None
     }
+    assignment_history = {}
+    for assignment in assignment_history_rows:
+        assignment_history.setdefault(assignment.patient_id, []).append(assignment)
     query = Patient.query.order_by(Patient.last_name, Patient.first_name)
     if is_clinician and not is_admin:
         if selected_filter == "assigned":
@@ -1385,6 +1392,7 @@ def patient_registry():
         "patients.html",
         patients=patients,
         assignments=assignments,
+        assignment_history=assignment_history,
         clinicians=clinicians,
         is_admin=is_admin,
         selected_filter=selected_filter,
