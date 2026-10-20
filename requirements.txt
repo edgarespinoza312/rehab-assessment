@@ -35,3 +35,4 @@ sounddevice==0.5.5
 tzdata==2026.3
 Werkzeug==3.1.8
 Flask-Migrate
+python-dotenv
