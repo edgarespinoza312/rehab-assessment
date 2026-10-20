@@ -2756,3 +2756,136 @@
         transition: none;
     }
 }
+
+
+/* ==========================================================
+   Clinician Portal
+========================================================== */
+.clinician-dashboard {
+    width: min(100%, 1080px);
+    margin: 0 auto;
+}
+
+.clinician-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-xl);
+    margin-bottom: var(--space-xl);
+}
+
+.clinician-page-header h1 {
+    margin: 0 0 var(--space-sm);
+    font-size: clamp(2rem, 4vw, 2.65rem);
+    letter-spacing: -.04em;
+}
+
+.clinician-eyebrow,
+.clinician-card-kicker {
+    margin: 0 0 var(--space-sm);
+    color: var(--primary);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: .12em;
+}
+
+.clinician-intro {
+    max-width: 640px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.65;
+}
+
+.clinician-logout {
+    flex-shrink: 0;
+}
+
+.clinician-workspace-card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-lg);
+    padding: clamp(24px, 4vw, 36px);
+    background: linear-gradient(135deg, var(--surface), var(--background-secondary));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+}
+
+.clinician-workspace-icon {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    flex: 0 0 52px;
+    place-items: center;
+    color: white;
+    background: var(--primary);
+    border-radius: var(--radius-md);
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.clinician-workspace-copy h2 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.4rem;
+}
+
+.clinician-workspace-copy > p:not(.clinician-card-kicker) {
+    max-width: 680px;
+    margin: 0 0 var(--space-lg);
+    color: var(--text-secondary);
+    line-height: 1.65;
+}
+
+.clinician-workspace-copy .btn {
+    text-decoration: none;
+}
+
+.clinician-access-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
+    padding: var(--space-lg);
+    background: rgba(37, 99, 235, .08);
+    border: 1px solid rgba(96, 165, 250, .22);
+    border-radius: var(--radius-md);
+}
+
+.clinician-access-mark {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    place-items: center;
+    color: var(--primary);
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-weight: 700;
+}
+
+.clinician-access-note p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    line-height: 1.65;
+}
+
+.clinician-access-note strong {
+    color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+    .clinician-page-header {
+        flex-direction: column;
+    }
+
+    .clinician-logout {
+        order: -1;
+        align-self: flex-end;
+    }
+
+    .clinician-workspace-card {
+        flex-direction: column;
+    }
+}
