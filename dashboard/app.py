@@ -35,6 +35,7 @@ from dashboard.services.authentication import (
     authorize_patient_access,
 )
 from dashboard.services.identity import Capability
+from dashboard.cli import register_cli_commands
 from dashboard.services.user_provisioning import (
     create_patient_account,
     create_user,
@@ -162,6 +163,7 @@ app.config.from_object(Config)
 db.init_app(app)
 migrate.init_app(app, db)
 init_auth(app)
+register_cli_commands(app)
 
 
 @app.after_request
