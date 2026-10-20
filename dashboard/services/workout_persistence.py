@@ -221,8 +221,17 @@ def persist_workout_session(
                 raise ValueError(f"workout plan {workout_plan_id} does not exist")
             if plan.patient_id not in (None, snapshot.patient_id):
                 raise ValueError("workout plan belongs to a different patient")
+            if snapshot.preset_id != f"workout_plan_{plan.plan_id}":
+                raise ValueError("session preset does not match the selected workout plan")
+            if snapshot.total_exercises != len(plan.exercises):
+                raise ValueError("session exercise count does not match the selected workout plan")
 
         results = [dict(result) for result in snapshot.completed_exercises]
+        if plan is not None and status is SessionStatus.SESSION_COMPLETE:
+            if len(results) != len(plan.exercises):
+                raise ValueError(
+                    "completed exercise count does not match the selected workout plan"
+                )
         result_rows = []
         for position, result in enumerate(results):
             exercise_id = result.get("exercise_id")
@@ -232,7 +241,11 @@ def persist_workout_session(
             BUILTIN_EXERCISES.get(exercise_id).profile_for_side(side)
             repetition_results = result.get("repetition_results") or []
             result_plan_exercise_id = None
-            if plan is not None and position < len(plan.exercises):
+            if plan is not None:
+                if position >= len(plan.exercises):
+                    raise ValueError(
+                        "completed exercise count exceeds the selected workout plan"
+                    )
                 prescribed = plan.exercises[position]
                 result_resistance = result.get("resistance_value")
                 prescribed_resistance = prescribed.resistance_value
