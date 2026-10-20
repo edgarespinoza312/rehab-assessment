@@ -1412,11 +1412,7 @@ def patient_assignment_action(patient_id):
         else:
             return jsonify({"error": "forbidden"}), 403
     except AssignmentError as error:
-        return render_template(
-            "assignment_error.html",
-            error=str(error),
-            return_url=url_for("patient_registry"),
-        ), 400
+        return jsonify({"error": str(error)}), 400
 
     return redirect(url_for("patient_registry", filter=request.form.get("filter", "all" if "ADMIN" in roles else "available")))
     
