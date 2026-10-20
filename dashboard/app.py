@@ -19,8 +19,7 @@ from dashboard.database import db, migrate
 
 # Import models so SQLA
 # lchemy knows they exist
-from dashboard.models import Patient, AssessmentRecord
-from dashboard.models import User
+from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User
 from dashboard.services.authentication import (
     current_identity,
     csrf_token,
@@ -40,6 +39,12 @@ from dashboard.services.user_provisioning import (
     create_patient_account,
     create_user,
     disable_user,
+)
+from dashboard.services.patient_assignments import (
+    AssignmentError,
+    active_assignment,
+    assign_patient,
+    end_assignment,
 )
 from dashboard.services.password_reset import (
     build_password_reset_url,
@@ -1111,9 +1116,14 @@ def new_patient():
 
         db.session.add(patient)
         db.session.commit()
+        try:
+            assign_patient(patient.patient_id, identity.user_id, identity.user_id)
+        except AssignmentError:
+            db.session.rollback()
+            raise
 
         return redirect(
-            url_for("patient_registry")
+            url_for("patient_registry", filter="assigned")
         )
 
     return render_template(
@@ -1313,21 +1323,102 @@ def save_workout_plan():
     }), 201
 
 @app.route("/patients")
+@require_auth
 def patient_registry():
     identity = current_identity()
-    if not identity.is_authenticated:
-        return redirect(url_for("login"))
-    if not any(role.value == "CLINICIAN" for role in identity.roles):
+    roles = {role.value for role in identity.roles}
+    is_admin = "ADMIN" in roles
+    is_clinician = "CLINICIAN" in roles
+    if not (is_admin or is_clinician):
         return jsonify({"error": "forbidden"}), 403
 
-    patients = Patient.query.order_by(
-        Patient.last_name
-    ).all()
+    selected_filter = request.args.get(
+        "filter", "all" if is_admin else "assigned"
+    )
+    if selected_filter not in {"all", "assigned", "available"}:
+        selected_filter = "assigned" if is_clinician and not is_admin else "all"
+
+    assignments = {
+        assignment.patient_id: assignment
+        for assignment in PatientAssignment.query.filter_by(ended_at=None).all()
+    }
+    query = Patient.query.order_by(Patient.last_name, Patient.first_name)
+    if is_clinician and not is_admin:
+        if selected_filter == "assigned":
+            assigned_ids = [
+                patient_id for patient_id, assignment in assignments.items()
+                if assignment.clinician_user_id == identity.user_id
+            ]
+            query = query.filter(Patient.patient_id.in_(assigned_ids))
+        elif selected_filter == "available":
+            available_ids = [
+                patient.patient_id for patient in Patient.query.with_entities(Patient.patient_id).all()
+                if patient.patient_id not in assignments
+            ]
+            query = query.filter(Patient.patient_id.in_(available_ids))
+    patients = query.all()
+    clinicians = [
+        user for user in User.query.filter_by(status="ACTIVE").order_by(User.display_name).all()
+        if any(role.name == "CLINICIAN" for role in user.roles)
+    ]
 
     return render_template(
         "patients.html",
         patients=patients,
+        assignments=assignments,
+        clinicians=clinicians,
+        is_admin=is_admin,
+        selected_filter=selected_filter,
+        current_user_id=identity.user_id,
     )
+
+
+@app.route("/patients/<int:patient_id>/assignment", methods=["POST"])
+@require_auth
+def patient_assignment_action(patient_id):
+    identity = current_identity()
+    roles = {role.value for role in identity.roles}
+    if not ({"ADMIN", "CLINICIAN"} & roles):
+        return jsonify({"error": "forbidden"}), 403
+    require_csrf()
+    if db.session.get(Patient, patient_id) is None:
+        abort(404)
+
+    action = (request.form.get("action") or "").strip()
+    try:
+        if "ADMIN" in roles and action == "revoke":
+            end_assignment(
+                patient_id,
+                identity.user_id,
+                (request.form.get("reason") or "Revoked by admin").strip(),
+            )
+        elif "ADMIN" in roles and action == "assign":
+            clinician_user_id = request.form.get("clinician_user_id", type=int)
+            if clinician_user_id is None:
+                raise AssignmentError("Select an active clinician.")
+            assign_patient(
+                patient_id,
+                clinician_user_id,
+                identity.user_id,
+                allow_reassignment=True,
+                reason=(request.form.get("reason") or "Reassigned by admin").strip(),
+            )
+        elif "CLINICIAN" in roles and action == "claim":
+            assign_patient(
+                patient_id,
+                identity.user_id,
+                identity.user_id,
+            )
+        else:
+            return jsonify({"error": "forbidden"}), 403
+    except AssignmentError as error:
+        return render_template(
+            "assignment_error.html",
+            error=str(error),
+            return_url=url_for("patient_registry"),
+        ), 400
+
+    return redirect(url_for("patient_registry", filter=request.form.get("filter", "all" if "ADMIN" in roles else "available")))
     
 @app.route("/patients/<int:patient_id>")
 @require_capability(Capability.VIEW_ASSIGNED_PATIENT)
