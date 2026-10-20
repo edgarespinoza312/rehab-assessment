@@ -59,6 +59,7 @@ jobs:
               "workout_sessions",
               "workout_exercise_results",
               "progression_review_events",
+              "patient_assignments",
           }
 
           with app.app_context():

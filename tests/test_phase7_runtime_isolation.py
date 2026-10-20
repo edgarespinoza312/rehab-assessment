@@ -14,7 +14,7 @@ from dashboard.app import (
     _release_runtime_context,
 )
 from dashboard.database import db
-from dashboard.models import AssessmentRecord, Patient, Role, User, WorkoutPlan
+from dashboard.models import AssessmentRecord, Patient, PatientAssignment, Role, User, WorkoutPlan
 from dashboard.runtime_context import RuntimeLifecycle
 from core.models import AssessmentResult
 from dashboard.services.authentication import RUNTIME_SESSION_KEY, hash_password
@@ -49,6 +49,14 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         db.drop_all()
         db.create_all()
         self.context.pop()
+
+    def _assign_clinician_to_patient(self, clinician, patient_id=1):
+        db.session.add(PatientAssignment(
+            patient_id=patient_id,
+            clinician_user_id=clinician.user_id,
+            assigned_by_user_id=clinician.user_id,
+        ))
+        db.session.commit()
 
     def _login(self, client, email, password, role="PATIENT"):
         client.get("/login")
@@ -127,12 +135,13 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         get_runtime.assert_called_once_with(create=False)
 
     def test_assessment_page_uses_runtime_patient_not_query_parameter(self):
-        create_user(
+        clinician = create_user(
             display_name="Clinician",
             email="clinician-context@example.test",
             password="password-clinician",
             role="CLINICIAN",
         )
+        self._assign_clinician_to_patient(clinician, 1)
         client = app.test_client()
         self._login(
             client,
@@ -325,12 +334,13 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIsNone(context.completed_session)
 
     def test_deleting_patient_immediately_releases_patient_runtime(self):
-        create_user(
+        clinician = create_user(
             display_name="Clinician",
             email="clinician@example.test",
             password="password-clinician",
             role="CLINICIAN",
         )
+        self._assign_clinician_to_patient(clinician, 1)
         patient_client = app.test_client()
         self._login(patient_client, "a@example.test", "password-a")
         self._start_assessment(patient_client, 1)
@@ -361,12 +371,13 @@ class Phase7RuntimeIsolationTests(unittest.TestCase):
         self.assertIsNone(context.completed_session)
 
     def test_deleting_patient_releases_clinician_workout_runtime(self):
-        create_user(
+        clinician = create_user(
             display_name="Workout Clinician",
             email="workout-clinician@example.test",
             password="password-clinician",
             role="CLINICIAN",
         )
+        self._assign_clinician_to_patient(clinician, 1)
         client = app.test_client()
         self._login(
             client,

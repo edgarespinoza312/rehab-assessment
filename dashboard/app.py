@@ -1900,6 +1900,12 @@ def delete_patient(patient_id):
 
     patient = _get_or_404(Patient, patient_id)
 
+    # Assignment history cannot outlive a hard-deleted patient because the
+    # audit rows reference the patient. Remove those dependent rows explicitly
+    # so the ORM does not try to null their non-nullable patient_id.
+    PatientAssignment.query.filter_by(patient_id=patient_id).delete(
+        synchronize_session=False
+    )
     db.session.delete(patient)
     db.session.commit()
     _release_patient_runtime_contexts(patient_id)
@@ -2015,6 +2021,8 @@ def start_workout():
         return jsonify({"error": "patient_id is required"}), 400
     if isinstance(patient_id, bool) or not isinstance(patient_id, int):
         return jsonify({"error": "patient_id must be an integer"}), 400
+    if db.session.get(Patient, patient_id) is None:
+        return jsonify({"error": f"patient {patient_id} does not exist"}), 404
     identity = current_identity()
     if any(role.value == "PATIENT" for role in identity.roles) and not any(
         role.value == "CLINICIAN" for role in identity.roles
@@ -2031,8 +2039,6 @@ def start_workout():
         patient_id,
     ):
         return jsonify({"error": "forbidden"}), 403
-    if db.session.get(Patient, patient_id) is None:
-        return jsonify({"error": f"patient {patient_id} does not exist"}), 404
     if selected_plan_id is not None:
         try:
             preset = load_workout_preset(

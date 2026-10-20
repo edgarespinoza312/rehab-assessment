@@ -146,9 +146,22 @@ class AuthorizationService:
         if capability == Capability.MANAGE_ACCOUNTS:
             return ApplicationRole.ADMIN in identity.roles
 
+        if capability == Capability.VIEW_PATIENT_PROGRESSION:
+            return (
+                (
+                    patient_role
+                    and patient_id is not None
+                    and identity.patient_id == patient_id
+                )
+                or (
+                    clinician_role
+                    and patient_id is not None
+                    and AuthorizationService._has_active_assignment(identity, patient_id)
+                )
+            )
+
         if capability in {
             Capability.VIEW_ASSIGNED_PATIENT,
-            Capability.VIEW_PATIENT_PROGRESSION,
             Capability.VIEW_ADVISORY,
             Capability.REVIEW_ADVISORY,
             Capability.DELETE_PATIENT_RECORD,

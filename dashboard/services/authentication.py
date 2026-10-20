@@ -20,7 +20,7 @@ from flask import (
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from dashboard.database import db
-from dashboard.models import User
+from dashboard.models import Patient, User
 from dashboard.services.identity import (
     AuthorizationService,
     Capability,
@@ -178,6 +178,13 @@ def require_capability(capability: Capability, *, patient_arg="patient_id"):
             if not identity.is_authenticated:
                 return _unauthorized_response()
             patient_id = kwargs.get(patient_arg)
+            # Preserve the API's 404 contract for nonexistent patient IDs,
+            # while still returning 403 for existing patients outside the
+            # caller's authorization scope.
+            if patient_id is not None and db.session.get(Patient, patient_id) is None:
+                if request.path.startswith("/api/"):
+                    return jsonify({"error": f"patient {patient_id} does not exist"}), 404
+                abort(404)
             if not AuthorizationService.can(
                 identity,
                 capability,
