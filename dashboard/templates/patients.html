@@ -1,477 +1,144 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <title>Revaliv | Clinical Portal</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Revaliv | Patient Directory</title>
     <style>
-
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-        }
-
-        body{
-
-            font-family:Arial, Helvetica, sans-serif;
-
-            background:#f6f8fc;
-
-            color:#1f2937;
-
-        }
-
-        .container{
-
-            max-width:1400px;
-
-            margin:50px auto;
-
-            padding:0 40px;
-
-        }
-
-        /* ===================================== */
-
-        .header{
-
-            display:flex;
-
-            justify-content:space-between;
-
-            align-items:center;
-
-            margin-bottom:40px;
-
-        }
-
-        .header h1{
-
-            font-size:42px;
-
-            font-weight:700;
-
-        }
-
-        .header h2{
-
-            margin-top:6px;
-
-            color:#6b7280;
-
-            font-size:18px;
-
-            font-weight:500;
-
-        }
-
-        .btn{
-
-            display:inline-block;
-
-            text-decoration:none;
-
-            background:#2563eb;
-
-            color:white;
-
-            padding:14px 24px;
-
-            border-radius:12px;
-
-            font-weight:bold;
-
-            transition:.2s;
-
-        }
-
-        .btn:hover{
-
-            background:#1d4ed8;
-
-        }
-
-        /* ===================================== */
-
-        .stats{
-
-            display:grid;
-
-            grid-template-columns:repeat(3,1fr);
-
-            gap:20px;
-
-            margin-bottom:35px;
-
-        }
-
-        .stat-card{
-
-            background:white;
-
-            border-radius:16px;
-
-            padding:28px;
-
-            box-shadow:0 4px 12px rgba(0,0,0,.08);
-
-        }
-
-        .stat-title{
-
-            color:#6b7280;
-
-            font-size:15px;
-
-            margin-bottom:12px;
-
-        }
-
-        .stat-value{
-
-            font-size:38px;
-
-            font-weight:bold;
-
-            color:#2563eb;
-
-        }
-
-        /* ===================================== */
-
-        .search{
-
-            width:100%;
-
-            margin-bottom:35px;
-
-        }
-
-        .search input{
-
-            width:100%;
-
-            padding:16px 20px;
-
-            border:none;
-
-            border-radius:14px;
-
-            background:white;
-
-            box-shadow:0 4px 12px rgba(0,0,0,.08);
-
-            font-size:16px;
-
-        }
-
-        /* ===================================== */
-
-        .patient-grid{
-
-            display:grid;
-
-            grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
-
-            gap:25px;
-
-        }
-
-        .patient-card{
-
-            background:white;
-
-            border-radius:18px;
-
-            padding:28px;
-
-            box-shadow:0 4px 12px rgba(0,0,0,.08);
-
-            transition:.25s;
-
-        }
-
-        .patient-card:hover{
-
-            transform:translateY(-5px);
-
-            box-shadow:0 14px 28px rgba(0,0,0,.12);
-
-        }
-
-        .avatar{
-
-            width:64px;
-
-            height:64px;
-
-            border-radius:50%;
-
-            background:#2563eb;
-
-            color:white;
-
-            display:flex;
-
-            align-items:center;
-
-            justify-content:center;
-
-            font-size:24px;
-
-            font-weight:bold;
-
-            margin-bottom:20px;
-
-        }
-
-        .patient-name{
-
-            font-size:26px;
-
-            font-weight:bold;
-
-            margin-bottom:10px;
-
-        }
-
-        .info{
-
-            color:#6b7280;
-
-            margin-bottom:8px;
-
-        }
-
-        .divider{
-
-            margin:22px 0;
-
-            border:none;
-
-            border-top:1px solid #ececec;
-
-        }
-
-        .open{
-
-            display:block;
-
-            text-align:center;
-
-            text-decoration:none;
-
-            background:#16a34a;
-
-            color:white;
-
-            padding:14px;
-
-            border-radius:12px;
-
-            font-weight:bold;
-
-            transition:.2s;
-
-        }
-
-        .open:hover{
-
-            background:#15803d;
-
-        }
-
-        .empty{
-
-            background:white;
-
-            padding:60px;
-
-            border-radius:18px;
-
-            text-align:center;
-
-            box-shadow:0 4px 12px rgba(0,0,0,.08);
-
-        }
-
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f6f8fc; color: #1f2937; font-family: Arial, Helvetica, sans-serif; }
+        .container { max-width: 1200px; margin: 42px auto; padding: 0 24px; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 28px; }
+        h1 { margin: 0; font-size: 32px; }
+        .muted { color: #64748b; margin-top: 8px; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 24px; }
+        input, select, button, .button { font: inherit; border-radius: 9px; padding: 11px 14px; }
+        input, select { border: 1px solid #cbd5e1; background: white; }
+        button, .button { border: 0; background: #2563eb; color: white; text-decoration: none; cursor: pointer; font-weight: 600; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+        .patient-card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; box-shadow: 0 4px 12px rgba(15,23,42,.04); }
+        .patient-card h2 { margin: 0 0 8px; font-size: 21px; }
+        .status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; background: #e2e8f0; color: #334155; margin: 8px 0 12px; }
+        .clinical { margin: 10px 0; color: #475569; line-height: 1.45; }
+        .actions { display: grid; gap: 10px; margin-top: 16px; }
+        .actions form { display: grid; gap: 8px; }
+        .secondary { background: #475569; }
+        .empty { background: white; padding: 36px; border-radius: 14px; color: #64748b; }
+        @media (max-width: 640px) { header { align-items: flex-start; flex-direction: column; } .toolbar input { width: 100%; } }
     </style>
-
 </head>
-
 <body>
-
 <div class="container">
-
-    <div class="header">
-
+    <header>
         <div>
-
-            <h1>Revaliv</h1>
-
-            <h2>Clinical Portal</h2>
-
+            <h1>Revaliv · Patient Directory</h1>
+            <p class="muted">
+                {% if is_admin %}
+                Admin assignment management. Clinical records remain restricted to assigned clinicians.
+                {% else %}
+                Browse the directory. Full clinical details are available only for patients assigned to you.
+                {% endif %}
+            </p>
         </div>
+        {% if not is_admin %}
+        <a class="button" href="{{ url_for('new_patient') }}">+ New Patient</a>
+        {% else %}
+        <a class="button" href="{{ url_for('admin_accounts') }}">Account Management</a>
+        {% endif %}
+    </header>
 
-        <a
-            class="btn"
-            href="{{ url_for('new_patient') }}"
-        >
-            + New Patient
-        </a>
+    <form class="toolbar" method="get" action="{{ url_for('patient_registry') }}">
+        <select name="filter" aria-label="Patient directory filter">
+            {% if is_admin %}
+            <option value="all" selected>All patients</option>
+            {% else %}
+            <option value="assigned" {% if selected_filter == 'assigned' %}selected{% endif %}>Assigned to me</option>
+            <option value="available" {% if selected_filter == 'available' %}selected{% endif %}>Available to claim</option>
+            <option value="all" {% if selected_filter == 'all' %}selected{% endif %}>All patients</option>
+            {% endif %}
+        </select>
+        <input id="search" type="search" placeholder="Search patient names…" aria-label="Search patient names">
+        <button type="submit">Apply filter</button>
+    </form>
 
-    </div>
+    {% if patients %}
+    <div class="grid" id="patientGrid">
+        {% for patient in patients %}
+        {% set assignment = assignments.get(patient.patient_id) %}
+        {% set mine = assignment and assignment.clinician_user_id == current_user_id %}
+        <article class="patient-card">
+            <h2>{{ patient.first_name }} {{ patient.last_name }}</h2>
+            {% if assignment %}
+                {% if mine %}
+                <span class="status">Assigned to you</span>
+                {% elif is_admin %}
+                <span class="status">Assigned · {{ assignment.clinician.display_name }}</span>
+                {% else %}
+                <span class="status">Assigned to another clinician</span>
+                {% endif %}
+            {% else %}
+                <span class="status">Unassigned</span>
+            {% endif %}
 
-    <div class="stats">
-
-        <div class="stat-card">
-
-            <div class="stat-title">Registered Patients</div>
-
-            <div class="stat-value">
-
-                {{ patients|length }}
-
+            {% if mine %}
+            <div class="clinical"><strong>Diagnosis:</strong> {{ patient.diagnosis or "Not recorded" }}</div>
+            <div class="clinical"><strong>Affected side:</strong> {{ patient.affected_side or "Not recorded" }}</div>
+            <a class="button" href="{{ url_for('patient_profile', patient_id=patient.patient_id) }}">Open clinical profile</a>
+            {% elif is_admin %}
+            <div class="clinical">Assignment status and account controls only. Clinical details are not displayed here.</div>
+            <div class="actions">
+                <form method="post" action="{{ url_for('patient_assignment_action', patient_id=patient.patient_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="assign">
+                    <input type="hidden" name="filter" value="all">
+                    <label for="clinician-{{ patient.patient_id }}">Assign or reassign clinician</label>
+                    <select id="clinician-{{ patient.patient_id }}" name="clinician_user_id" required>
+                        <option value="">Select clinician</option>
+                        {% for clinician in clinicians %}
+                        <option value="{{ clinician.user_id }}" {% if assignment and assignment.clinician_user_id == clinician.user_id %}selected{% endif %}>{{ clinician.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="reason" maxlength="240" placeholder="Reason (optional)">
+                    <button type="submit">Save assignment</button>
+                </form>
+                {% if assignment %}
+                <form method="post" action="{{ url_for('patient_assignment_action', patient_id=patient.patient_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="revoke">
+                    <input type="hidden" name="filter" value="all">
+                    <input type="text" name="reason" maxlength="240" placeholder="Revocation reason (optional)">
+                    <button class="secondary" type="submit">Revoke assignment</button>
+                </form>
+                {% endif %}
             </div>
-
-        </div>
-
-        <div class="stat-card">
-
-            <div class="stat-title">Clinical Records</div>
-
-            <div class="stat-value">
-
-                {{ patients|length }}
-
+            {% elif not assignment %}
+            <div class="clinical">Limited directory entry. Claim this patient to access clinical records.</div>
+            <div class="actions">
+                <form method="post" action="{{ url_for('patient_assignment_action', patient_id=patient.patient_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="claim">
+                    <input type="hidden" name="filter" value="available">
+                    <button type="submit">Claim patient</button>
+                </form>
             </div>
-
-        </div>
-
-        <div class="stat-card">
-
-            <div class="stat-title">Portal Status</div>
-
-            <div class="stat-value">
-
-                ✓
-
-            </div>
-
-        </div>
-
+            {% else %}
+            <div class="clinical">Clinical information is hidden because this patient is assigned to another clinician.</div>
+            {% endif %}
+        </article>
+        {% endfor %}
     </div>
-
-    <div class="search">
-
-        <input
-            id="search"
-            placeholder="Search patients..."
-            type="text"
-        >
-
-    </div>
-
-{% if patients %}
-
-<div
-    class="patient-grid"
-    id="patientGrid"
->
-
-{% for patient in patients %}
-
-<div class="patient-card">
-
-    <div class="avatar">
-
-        {{ patient.first_name[0] }}{{ patient.last_name[0] }}
-
-    </div>
-
-    <div class="patient-name">
-
-        {{ patient.first_name }}
-        {{ patient.last_name }}
-
-    </div>
-
-    <div class="info">
-
-        <strong>Diagnosis:</strong>
-        {{ patient.diagnosis }}
-
-    </div>
-
-    <div class="info">
-
-        <strong>Affected Side:</strong>
-        {{ patient.affected_side }}
-
-    </div>
-
-    <hr class="divider">
-
-    <a
-        class="open"
-        href="{{ url_for('patient_profile',
-                         patient_id=patient.patient_id) }}"
-    >
-
-        Open Clinical Profile →
-
-    </a>
-
+    {% else %}
+    <div class="empty">No patients match this directory filter.</div>
+    {% endif %}
 </div>
-
-{% endfor %}
-
-</div>
-
-{% else %}
-
-<div class="empty">
-
-<h2>No Patients Registered</h2>
-
-<br>
-
-<p>
-
-Create your first rehabilitation patient to begin using Revaliv.
-
-</p>
-
-</div>
-
-{% endif %}
-
-</div>
-
 <script>
-
-const search=document.getElementById("search");
-
-search.addEventListener("keyup",()=>{
-
-    const value=search.value.toLowerCase();
-
-    document.querySelectorAll(".patient-card").forEach(card=>{
-
-        const text=card.innerText.toLowerCase();
-
-        card.style.display=text.includes(value)?"block":"none";
-
+const search = document.getElementById("search");
+search.addEventListener("input", () => {
+    const value = search.value.toLowerCase();
+    document.querySelectorAll(".patient-card").forEach(card => {
+        card.hidden = !card.innerText.toLowerCase().includes(value);
     });
-
 });
-
 </script>
-
 </body>
-
 </html>
