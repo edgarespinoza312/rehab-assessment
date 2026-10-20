@@ -146,6 +146,17 @@ REVALIV_DATABASE_URI=sqlite:// python -m pytest -q
 
 ---
 
+
+### Initial administrator setup
+
+A fresh installation has no administrator account by default. Create the first administrator from a trusted local terminal after installing the project dependencies and activating the intended virtual environment:
+
+```bash
+python -m flask --app dashboard.app bootstrap-admin
+```
+
+The command prompts for a display name, email address, and password (with hidden password input and confirmation). It uses the application's configured database and existing password hashing/account-provisioning logic. It refuses to create another administrator if an account with the `ADMIN` role already exists. Do not expose this command through a public web route or run it against an unintended database. Once the first administrator exists, sign in through Revaliv and create clinician accounts from **Account management**.
+
 ## How It Works
 
 ```
