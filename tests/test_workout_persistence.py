@@ -1,5 +1,6 @@
 import json
 import unittest
+from dataclasses import replace
 
 from flask import Flask
 from sqlalchemy.exc import IntegrityError
@@ -277,6 +278,68 @@ class WorkoutPersistenceTests(unittest.TestCase):
         repeated = persist_workout_session(snapshot, workout_plan_id=plan.plan_id)
         self.assertEqual(repeated.workout_session_id, stored.workout_session_id)
         self.assertEqual(CompletedWorkoutSession.query.count(), 1)
+
+    def test_cancelled_session_rejects_results_beyond_selected_plan(self):
+        plan = create_workout_plan(
+            "One-stage workout",
+            (WorkoutPrescription("bicep_curl", "right", 1),),
+            patient_id=self.patient.patient_id,
+        )
+        snapshot = self._complete_plan_session(plan)
+        invalid_snapshot = replace(
+            snapshot,
+            status=SessionStatus.CANCELLED,
+            completed_exercises=(
+                *snapshot.completed_exercises,
+                snapshot.completed_exercises[-1],
+            ),
+        )
+
+        with self.assertRaisesRegex(ValueError, "exceeds the selected workout plan"):
+            persist_workout_session(invalid_snapshot, workout_plan_id=plan.plan_id)
+
+        self.assertEqual(CompletedWorkoutSession.query.count(), 0)
+
+    def test_persistence_rejects_snapshot_from_a_different_plan(self):
+        plan = create_workout_plan(
+            "Plan identity check",
+            (WorkoutPrescription("bicep_curl", "right", 1),),
+            patient_id=self.patient.patient_id,
+        )
+        snapshot = self._complete_plan_session(plan)
+
+        with self.assertRaisesRegex(ValueError, "preset does not match"):
+            persist_workout_session(
+                replace(snapshot, preset_id="workout_plan_999"),
+                workout_plan_id=plan.plan_id,
+            )
+        with self.assertRaisesRegex(ValueError, "exercise count does not match"):
+            persist_workout_session(
+                replace(snapshot, total_exercises=2),
+                workout_plan_id=plan.plan_id,
+            )
+
+        self.assertEqual(CompletedWorkoutSession.query.count(), 0)
+
+    def test_completed_session_rejects_missing_plan_results(self):
+        plan = create_workout_plan(
+            "Complete plan required",
+            (
+                WorkoutPrescription("bicep_curl", "right", 1),
+                WorkoutPrescription("bicep_curl", "left", 1),
+            ),
+            patient_id=self.patient.patient_id,
+        )
+        snapshot = self._complete_plan_session(plan)
+        incomplete_snapshot = replace(
+            snapshot,
+            completed_exercises=snapshot.completed_exercises[:1],
+        )
+
+        with self.assertRaisesRegex(ValueError, "completed exercise count"):
+            persist_workout_session(incomplete_snapshot, workout_plan_id=plan.plan_id)
+
+        self.assertEqual(CompletedWorkoutSession.query.count(), 0)
 
     def test_cancelled_session_keeps_completed_exercise_and_cancel_status(self):
         plan = create_workout_plan(
