@@ -124,6 +124,22 @@
             {% else %}
             <div class="clinical">Clinical information is hidden because this patient is assigned to another clinician.</div>
             {% endif %}
+            {% if is_admin and assignment_history.get(patient.patient_id) %}
+            <div class="clinical">
+                <strong>Assignment history</strong>
+                {% for historical_assignment in assignment_history.get(patient.patient_id) %}
+                <p>
+                    {{ historical_assignment.clinician.display_name }} · assigned {{ historical_assignment.assigned_at.strftime("%Y-%m-%d %H:%M UTC") }}
+                    {% if historical_assignment.ended_at %}
+                    · ended {{ historical_assignment.ended_at.strftime("%Y-%m-%d %H:%M UTC") }}
+                    · {{ historical_assignment.end_reason or "No reason recorded" }}
+                    {% else %}
+                    · active
+                    {% endif %}
+                </p>
+                {% endfor %}
+            </div>
+            {% endif %}
         </article>
         {% endfor %}
     </div>
