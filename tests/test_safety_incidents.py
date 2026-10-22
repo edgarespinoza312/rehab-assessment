@@ -200,6 +200,11 @@ class SafetyIncidentWorkflowTests(unittest.TestCase):
             status="completed",
             evidence="The score validation patch was deployed to the test branch.",
         )
+        record_independent_safety_review(
+            incident.incident_id,
+            self.reviewer.user_id,
+            "Reviewed the incident while verifying that required corrective actions were completed.",
+        )
         with self.assertRaisesRegex(SafetyWorkflowError, "independently verified"):
             close_safety_incident(
                 incident.incident_id,
