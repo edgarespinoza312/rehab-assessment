@@ -106,8 +106,10 @@ def _validate_proposed_value(field_name: str, value):
             raise CorrectionWorkflowError(f"{field_name} must be a finite score from 0 through 100")
         return float(value)
     if field_name == "feedback":
-        if not isinstance(value, (str, list, dict)):
-            raise CorrectionWorkflowError("feedback must be text, a list, or an object")
+        if not isinstance(value, (str, list)) or (
+            isinstance(value, list) and any(not isinstance(item, str) for item in value)
+        ):
+            raise CorrectionWorkflowError("feedback must be text or a list of text items")
         if len(_canonical_json(value)) > MAX_FEEDBACK_LENGTH:
             raise CorrectionWorkflowError("feedback exceeds the maximum permitted size")
         return value
