@@ -20,7 +20,6 @@ def upgrade():
             sa.Column(
                 "created_by_user_id",
                 sa.Integer(),
-                sa.ForeignKey("users.user_id", ondelete="SET NULL"),
                 nullable=True,
             )
         )
@@ -36,7 +35,6 @@ def upgrade():
             sa.Column(
                 "approved_by_user_id",
                 sa.Integer(),
-                sa.ForeignKey("users.user_id", ondelete="SET NULL"),
                 nullable=True,
             )
         )
