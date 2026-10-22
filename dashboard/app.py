@@ -19,7 +19,7 @@ from dashboard.database import db, migrate
 
 # Import models so SQLA
 # lchemy knows they exist
-from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan, SafetyIncident, SafetyCorrectiveAction
+from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan, SafetyIncident, SafetyCorrectiveAction, AssessmentCorrection
 from dashboard.services.authentication import (
     current_identity,
     csrf_token,
@@ -126,6 +126,13 @@ from dashboard.services.workout_persistence import (
     load_workout_preset,
     persist_workout_session,
     review_workout_plan,
+)
+from dashboard.services.assessment_corrections import (
+    CorrectionWorkflowError,
+    correction_to_dict,
+    effective_assessment_values,
+    request_assessment_correction,
+    review_assessment_correction,
 )
 from dashboard.services.safety_incidents import (
     SafetyWorkflowError,
@@ -1029,6 +1036,98 @@ def update_assessment_notes(assessment_id):
         )
     )
 
+@app.route("/api/assessments/<int:assessment_id>/corrections", methods=["GET", "POST"])
+@require_auth
+def assessment_correction_collection(assessment_id):
+    identity = current_identity()
+    assessment = db.session.get(AssessmentRecord, assessment_id)
+    if assessment is None:
+        return jsonify({"error": "assessment not found"}), 404
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, assessment.patient_id
+    ):
+        # Do not leak whether a different clinician's assessment exists.
+        return jsonify({"error": "forbidden"}), 403
+
+    if request.method == "GET":
+        corrections = AssessmentCorrection.query.filter_by(
+            assessment_id=assessment_id
+        ).order_by(AssessmentCorrection.requested_at.desc()).all()
+        return jsonify({
+            "assessment_id": assessment_id,
+            "original_snapshot_hash": effective_assessment_values(
+                assessment_id
+            )["source_snapshot_hash"],
+            "corrections": [correction_to_dict(item, include_events=True) for item in corrections],
+        })
+
+    require_csrf()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        correction = request_assessment_correction(
+            assessment_id,
+            identity.user_id,
+            field_name=payload.get("field_name"),
+            proposed_value=payload.get("proposed_value"),
+            reason=payload.get("reason"),
+            evidence_reference=payload.get("evidence_reference"),
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except CorrectionWorkflowError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(correction_to_dict(correction, include_events=True)), 201
+
+
+@app.route("/api/assessment-corrections/<int:correction_id>/review", methods=["POST"])
+@require_auth
+def assessment_correction_review_route(correction_id):
+    identity = current_identity()
+    correction = db.session.get(AssessmentCorrection, correction_id)
+    if correction is None:
+        return jsonify({"error": "correction not found"}), 404
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        reviewed = review_assessment_correction(
+            correction_id,
+            identity.user_id,
+            decision=payload.get("decision"),
+            rationale=payload.get("rationale"),
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except CorrectionWorkflowError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(correction_to_dict(reviewed, include_events=True)), 200
+
+
+@app.route("/api/assessments/<int:assessment_id>/effective-values", methods=["GET"])
+@require_auth
+def assessment_effective_values_route(assessment_id):
+    identity = current_identity()
+    assessment = db.session.get(AssessmentRecord, assessment_id)
+    if assessment is None:
+        return jsonify({"error": "assessment not found"}), 404
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, assessment.patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    return jsonify(effective_assessment_values(assessment_id))
+
+
 @app.route("/assessment/<int:assessment_id>")
 @require_auth
 def view_assessment(assessment_id):
@@ -1041,18 +1140,27 @@ def view_assessment(assessment_id):
     ):
         abort(404)
 
+    effective = effective_assessment_values(assessment_id)
+    feedback_value = effective.get("feedback")
+    if isinstance(feedback_value, str):
+        try:
+            feedback_value = json.loads(feedback_value or "[]")
+        except (TypeError, json.JSONDecodeError):
+            feedback_value = {
+                "status": "unavailable",
+                "reason": "feedback data is malformed",
+            }
     report = {
-
-        "exercise": assessment.exercise,
-        "repetitions": assessment.repetitions,
-        "average_score": assessment.average_score,
-        "best_score": assessment.best_score,
-        "worst_score": assessment.worst_score,
-        "trend": assessment.trend,
-        "feedback": json.loads(
-            assessment.feedback or "[]"
-        )
-
+        "exercise": effective["exercise"],
+        "repetitions": effective["repetitions"],
+        "average_score": effective["average_score"],
+        "best_score": effective["best_score"],
+        "worst_score": effective["worst_score"],
+        "trend": effective["trend"],
+        "feedback": feedback_value,
+        "effective_corrections": effective["effective_corrections"],
+        "stale_correction_ids": effective["stale_correction_ids"],
+        "source_snapshot_hash": effective["source_snapshot_hash"],
     }
 
     return render_template(
