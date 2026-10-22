@@ -71,8 +71,9 @@ from core.exercise_catalog import get_exercise_profile
 from core.perception.base import PerceptionResult, PoseStatus, ReadinessState
 from core.workout import SessionEngine, SessionStatus, STARTER_BICEP_CURL_PRESET
 from dashboard.database import db
-from dashboard.models import CompletedWorkoutSession, Patient, User, WorkoutPlan
+from dashboard.models import CompletedWorkoutSession, Patient, Role, User, WorkoutPlan
 from dashboard.workout_runtime import WorkoutRuntimeAdapter
+from dashboard.services.workout_persistence import review_workout_plan
 from tests.support.auth import login_client, seed_clinician
 
 
@@ -103,6 +104,31 @@ class DashboardAssessmentStateSyncTests(unittest.TestCase):
             _test_pose.block_calibration = False
             _test_pose.calibration_started.clear()
             _test_pose.allow_calibration.clear()
+
+    def _approve_saved_plan(self, plan_id):
+        """Use a separate clinician to satisfy the plan's independent review gate."""
+        with dashboard.app.app_context():
+            reviewer = User.query.filter_by(email="plan-reviewer@test.invalid").one_or_none()
+            if reviewer is None:
+                role = Role.query.filter_by(name="CLINICIAN").one_or_none()
+                if role is None:
+                    role = Role(name="CLINICIAN")
+                    db.session.add(role)
+                    db.session.flush()
+                reviewer = User(
+                    display_name="Independent Test Reviewer",
+                    email="plan-reviewer@test.invalid",
+                    status="ACTIVE",
+                    roles=[role],
+                )
+                db.session.add(reviewer)
+                db.session.commit()
+            review_workout_plan(
+                plan_id,
+                reviewer.user_id,
+                "approve",
+                "Independent review recorded by workflow test fixture.",
+            )
 
     def _new_session(self, metrics=None, state=None):
         exercise = ExerciseType.LEFT_BICEP_CURL
@@ -813,6 +839,7 @@ class DashboardAssessmentStateSyncTests(unittest.TestCase):
         )
         self.assertEqual(created.status_code, 201)
         plan_id = created.get_json()["plan_id"]
+        self._approve_saved_plan(plan_id)
 
         started = self._run_request(
             "post",
@@ -937,6 +964,7 @@ class DashboardAssessmentStateSyncTests(unittest.TestCase):
             },
         )
         plan_id = created.get_json()["plan_id"]
+        self._approve_saved_plan(plan_id)
         started = self._run_request(
             "post",
             "/workout/start",
