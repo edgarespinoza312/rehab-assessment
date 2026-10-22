@@ -26,6 +26,10 @@ IDENTITY_JOINTS = (
     "left_wrist",
     "right_wrist",
 )
+BIOMECHANICAL_BOUNDS_JOINTS = frozenset(IDENTITY_JOINTS + (
+    "left_hip", "right_hip", "left_knee", "right_knee",
+    "left_ankle", "right_ankle",
+))
 
 
 @dataclass
@@ -110,7 +114,9 @@ def validate_landmarks(
         x, y, confidence = (float(value) for value in point)
         # Every canonical landmark can feed a metric or overlay. Allowing
         # out-of-frame hips/knees through is unsafe for the new joint references.
-        if not 0.0 <= x < width or not 0.0 <= y < height:
+        if name in BIOMECHANICAL_BOUNDS_JOINTS and (
+            not 0.0 <= x < width or not 0.0 <= y < height
+        ):
             return _reject(
                 f"landmark_out_of_bounds:{name}", "anatomical_implausibility"
             )
