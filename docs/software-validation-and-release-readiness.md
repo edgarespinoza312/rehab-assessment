@@ -49,6 +49,12 @@ No code-only test can establish that the system's movement measurements are accu
 
 Predefine metrics before reviewing the outputs: repetition-count absolute error, repetition detection precision/recall, joint-angle mean absolute error against annotation, usable-frame rate, side-identification error rate, and latency. Report sample sizes and failure cases. Keep MediaPipe and TensorRT comparisons on the same recordings. Do not tune and evaluate on the same clips without disclosure.
 
+### Workout-history measurement granularity
+
+The in-memory workout result contains one entry per completed repetition, including the overall score, six domain scores, and feedback. The persistence service currently reduces those entries to exercise-level aggregates (average domain scores and overall score) and concatenates repetition feedback into one JSON list. The database does not retain repetition order or the per-repetition score/domain-score association; the serialized `repetition_scores` list is also not stored. This limits later analysis of within-exercise variation and the traceability of a specific repetition's feedback.
+
+Treat this as a known data-retention limitation, not a proven defect in the current summary UI. Before adding a schema migration, confirm the intended history/reporting use cases and data-retention policy. If repetition-level analysis is required, add ordered child records linked to `WorkoutExerciseResult`, persist the existing per-repetition fields without recomputing them, and test round-trip order, cancelled sessions, empty/partial results, migration behavior, and rollback. Preserve `None` as unavailable; do not silently coerce missing measurements to zero. Avoid storing raw video or additional identifying data unless explicitly required and approved.
+
 ### Advisory progression
 
 Progression labels are software-validation heuristics, not clinically validated conclusions or prescriptions. Synthetic scenario tests validate deterministic software behavior only. Do not translate the classifications into exercise prescriptions, resistance changes, patient-facing clinical claims, or automated workout changes without domain-owner review and an appropriate clinical validation protocol.
