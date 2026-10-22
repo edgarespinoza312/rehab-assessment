@@ -1231,6 +1231,13 @@ def view_assessment(assessment_id):
         abort(404)
 
     effective = effective_assessment_values(assessment_id)
+    correction_records = AssessmentCorrection.query.filter_by(
+        assessment_id=assessment_id
+    ).order_by(AssessmentCorrection.requested_at.desc()).all()
+    correction_history = [
+        correction_to_dict(item, include_events=False)
+        for item in correction_records
+    ]
     feedback_value = effective.get("feedback")
     if isinstance(feedback_value, str):
         try:
@@ -1264,6 +1271,15 @@ def view_assessment(assessment_id):
             Capability.VIEW_ASSIGNED_PATIENT,
             assessment.patient_id,
         ),
+        can_request_correction=(
+            authorize_patient_access(
+                current_identity(),
+                Capability.VIEW_ASSIGNED_PATIENT,
+                assessment.patient_id,
+            )
+            and any(role.value == "CLINICIAN" for role in current_identity().roles)
+        ),
+        correction_history=correction_history,
     )
 
 
