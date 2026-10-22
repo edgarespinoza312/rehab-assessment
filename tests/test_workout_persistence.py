@@ -300,6 +300,47 @@ class WorkoutPersistenceTests(unittest.TestCase):
 
         self.assertEqual(CompletedWorkoutSession.query.count(), 0)
 
+    def test_completed_session_rejects_results_beyond_selected_plan(self):
+        plan = create_workout_plan(
+            "One-stage workout",
+            (WorkoutPrescription("bicep_curl", "right", 1),),
+            patient_id=self.patient.patient_id,
+        )
+        snapshot = self._complete_plan_session(plan)
+        invalid_snapshot = replace(
+            snapshot,
+            completed_exercises=(
+                *snapshot.completed_exercises,
+                snapshot.completed_exercises[-1],
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError, "completed exercise count does not match"
+        ):
+            persist_workout_session(
+                invalid_snapshot,
+                workout_plan_id=plan.plan_id,
+            )
+
+        self.assertEqual(CompletedWorkoutSession.query.count(), 0)
+
+    def test_plan_backed_snapshot_requires_workout_plan_id(self):
+        plan = create_workout_plan(
+            "Plan ID required",
+            (WorkoutPrescription("bicep_curl", "right", 1),),
+            patient_id=self.patient.patient_id,
+        )
+        snapshot = self._complete_plan_session(plan)
+
+        with self.assertRaisesRegex(
+            ValueError, "workout_plan_id is required"
+        ):
+            persist_workout_session(snapshot)
+
+        self.assertEqual(CompletedWorkoutSession.query.count(), 0)
+        self.assertEqual(WorkoutExerciseResult.query.count(), 0)
+
     def test_persistence_rejects_snapshot_from_a_different_plan(self):
         plan = create_workout_plan(
             "Plan identity check",
