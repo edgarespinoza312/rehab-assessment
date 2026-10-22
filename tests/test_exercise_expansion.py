@@ -18,6 +18,8 @@ class ExerciseExpansionTests(unittest.TestCase):
             ExerciseType.RIGHT_TRICEP_EXTENSION,
             ExerciseType.LEFT_SHOULDER_ABDUCTION,
             ExerciseType.RIGHT_SHOULDER_ABDUCTION,
+            ExerciseType.LEFT_KNEE_EXTENSION,
+            ExerciseType.RIGHT_KNEE_EXTENSION,
         ):
             with self.subTest(exercise=exercise.name):
                 profile = get_profile(exercise)
@@ -33,6 +35,8 @@ class ExerciseExpansionTests(unittest.TestCase):
             ExerciseType.RIGHT_TRICEP_EXTENSION,
             ExerciseType.LEFT_SHOULDER_ABDUCTION,
             ExerciseType.RIGHT_SHOULDER_ABDUCTION,
+            ExerciseType.LEFT_KNEE_EXTENSION,
+            ExerciseType.RIGHT_KNEE_EXTENSION,
         ):
             with self.subTest(exercise=exercise.name):
                 profile = get_profile(exercise)
@@ -98,6 +102,46 @@ class ExerciseExpansionTests(unittest.TestCase):
         self.assertAlmostEqual(metrics.shoulder_angle_left, 90.0, delta=0.1)
         self.assertGreaterEqual(metrics.range_of_motion, 0.0)
 
+    def test_knee_extension_counts_a_complete_angle_cycle(self):
+        cases = (
+            (ExerciseType.LEFT_KNEE_EXTENSION, "left"),
+            (ExerciseType.RIGHT_KNEE_EXTENSION, "right"),
+        )
+        for exercise, side in cases:
+            with self.subTest(side=side):
+                engine = ExerciseEngine()
+                profile = get_profile(exercise)
+                metrics = MovementMetrics()
+                field = f"knee_angle_{side}"
+
+                for angle in (100.0, 125.0, 160.0, 125.0):
+                    setattr(metrics, field, angle)
+                    engine.analyze(profile, metrics)
+                setattr(metrics, field, 100.0)
+                state = engine.analyze(profile, metrics)
+                self.assertTrue(state.rep_completed)
+                self.assertEqual(state.repetitions, 1)
+                self.assertEqual(state.exercise_name, exercise.name)
+
+    def test_knee_angles_are_computed_from_hip_knee_ankle(self):
+        skeleton = Skeleton()
+        for name, x, y in (
+            (JointType.LEFT_HIP, 0.20, 0.20),
+            (JointType.LEFT_KNEE, 0.20, 0.50),
+            (JointType.LEFT_ANKLE, 0.50, 0.50),
+            (JointType.RIGHT_HIP, 0.80, 0.20),
+            (JointType.RIGHT_KNEE, 0.80, 0.50),
+            (JointType.RIGHT_ANKLE, 0.50, 0.50),
+        ):
+            skeleton.add_joint(Joint(name=name, x=x, y=y, visibility=0.9))
+
+        metrics = MovementMetrics()
+        JointAnalyzer().analyze(
+            skeleton, metrics, get_profile(ExerciseType.LEFT_KNEE_EXTENSION)
+        )
+        self.assertAlmostEqual(metrics.knee_angle_left, 90.0, delta=0.1)
+        self.assertEqual(metrics.knee_angle_right, 90.0)
+
     def test_new_exercises_are_accepted_by_workout_prescriptions(self):
         preset = WorkoutPreset(
             id="engineering-evaluation",
@@ -105,6 +149,7 @@ class ExerciseExpansionTests(unittest.TestCase):
             exercises=(
                 WorkoutPrescription("triceps_extension", "left", 3),
                 WorkoutPrescription("shoulder_abduction", "right", 3),
+                WorkoutPrescription("knee_extension", "left", 3),
             ),
         )
         engine = SessionEngine()
