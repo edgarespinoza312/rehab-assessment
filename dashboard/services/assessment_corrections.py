@@ -217,6 +217,16 @@ def request_assessment_correction(
     original_value = getattr(record, field_name)
     if original_value == value:
         raise CorrectionWorkflowError("proposed value is identical to the recorded value")
+    existing = AssessmentCorrection.query.filter(
+        AssessmentCorrection.assessment_id == assessment_id,
+        AssessmentCorrection.field_name == field_name,
+        AssessmentCorrection.status.in_(("pending", "accepted")),
+    ).first()
+    if existing is not None:
+        raise CorrectionWorkflowError(
+            "a pending or accepted correction already exists for this field; "
+            "review or reconcile it before creating another"
+        )
     correction = AssessmentCorrection(
         assessment_id=record.assessment_id,
         patient_id=record.patient_id,
@@ -260,7 +270,7 @@ def review_assessment_correction(
     rationale: str,
 ) -> AssessmentCorrection:
     reviewer = _active_clinician(reviewer_user_id)
-    if decision not in {"accept", "reject"}:
+    if not isinstance(decision, str) or decision not in {"accept", "reject"}:
         raise CorrectionWorkflowError("decision must be accept or reject")
     if not isinstance(rationale, str) or not 8 <= len(rationale.strip()) <= MAX_REASON_LENGTH:
         raise CorrectionWorkflowError("review rationale must be 8 to 4000 characters")
