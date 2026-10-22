@@ -8,6 +8,8 @@ from dashboard.services.authentication import hash_password
 
 class PatientAssignmentWorkflowTests(unittest.TestCase):
     def setUp(self):
+        # Exercise engineering workflows explicitly; production configuration forbids this opt-in.
+        app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         self.context = app.app_context()
         self.context.push()
         db.session.rollback()
