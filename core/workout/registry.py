@@ -24,6 +24,14 @@ BUILTIN_EXERCISES = ExerciseDefinitionRegistry((
         ),
     ),
     ExerciseDefinition(
+        id="knee_extension",
+        display_name="Knee Extension (Engineering Evaluation Only)",
+        profiles=(
+            get_profile(ExerciseType.LEFT_KNEE_EXTENSION),
+            get_profile(ExerciseType.RIGHT_KNEE_EXTENSION),
+        ),
+    ),
+    ExerciseDefinition(
         id="shoulder_abduction",
         display_name="Shoulder Abduction (Engineering Evaluation Only)",
         profiles=(
