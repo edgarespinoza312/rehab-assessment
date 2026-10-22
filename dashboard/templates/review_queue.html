@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Independent Review Queue | Revaliv{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h1>Independent Review Queue</h1>
+    <p>Only tasks covered by your active, scope-specific review grants appear here. A grant does not permit general access to the patient record.</p>
+</section>
+
+<section class="card">
+    <h2>Workout plans awaiting review</h2>
+    {% if plans %}
+    <ul>
+        {% for plan in plans %}
+        <li>
+            <strong>{{ plan.name }}</strong> — patient record #{{ plan.patient_id }} —
+            {{ plan.approval_status|title }}
+            <p>{{ plan.description }}</p>
+            <a href="{{ url_for('workout_plan_review_page', plan_id=plan.plan_id) }}">
+                Review plan #{{ plan.plan_id }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No delegated workout plans are awaiting review.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Assessment corrections awaiting review</h2>
+    {% if corrections %}
+    <ul>
+        {% for item in corrections %}
+        <li>
+            <strong>Correction #{{ item.correction_id }}</strong> — field {{ item.field_name }} —
+            patient record #{{ item.patient_id }}
+            <p>{{ item.reason }}</p>
+            <a href="{{ url_for('assessment_correction_review_page', correction_id=item.correction_id) }}">
+                Review correction #{{ item.correction_id }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No delegated assessment corrections are awaiting review.</p>
+    {% endif %}
+</section>
+{% endblock %}
