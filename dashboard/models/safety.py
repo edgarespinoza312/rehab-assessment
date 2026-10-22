@@ -103,6 +103,18 @@ class SafetyIncident(db.Model):
         order_by="SafetyCorrectiveAction.action_id",
         passive_deletes=True,
     )
+    outgoing_links = db.relationship(
+        "SafetyIncidentLink",
+        foreign_keys="SafetyIncidentLink.incident_id",
+        back_populates="incident",
+        passive_deletes=True,
+    )
+    incoming_links = db.relationship(
+        "SafetyIncidentLink",
+        foreign_keys="SafetyIncidentLink.related_incident_id",
+        back_populates="related_incident",
+        passive_deletes=True,
+    )
 
 
 class SafetyIncidentEvent(db.Model):
