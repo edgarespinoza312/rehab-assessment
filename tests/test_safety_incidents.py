@@ -12,6 +12,7 @@ from dashboard.services.safety_incidents import (
     SafetyWorkflowError,
     active_safety_restrictions,
     assert_safety_scope_allowed,
+    link_safety_incidents,
     close_safety_incident,
     create_corrective_action,
     record_independent_safety_review,
@@ -282,3 +283,41 @@ class SafetyIncidentWorkflowTests(unittest.TestCase):
         self.assertIsNone(reopened.independent_reviewer_user_id)
         self.assertTrue(verify_safety_event_chain(incident.incident_id))
 
+
+
+    def test_cross_case_signal_links_cases_and_escalates_both_for_review(self):
+        routine = self._report()
+        critical = self._report(
+            severity="critical",
+            likelihood="unlikely",
+            evidence_strength="weak",
+        )
+        link = link_safety_incidents(
+            routine.incident_id,
+            critical.incident_id,
+            self.closer.user_id,
+            link_type="cross_case_signal",
+            rationale="Both reports point to a potentially shared measurement failure.",
+        )
+        db.session.refresh(routine)
+        db.session.refresh(critical)
+        self.assertEqual(link.incident_id, routine.incident_id)
+        self.assertEqual(link.related_incident_id, critical.incident_id)
+        self.assertEqual(routine.priority_tier, "critical")
+        self.assertEqual(routine.status, "restricted")
+        self.assertEqual(critical.status, "restricted")
+        self.assertLessEqual(
+            routine.response_due_at - datetime.utcnow(),
+            timedelta(hours=1, seconds=2),
+        )
+        self.assertTrue(verify_safety_event_chain(routine.incident_id))
+        self.assertTrue(verify_safety_event_chain(critical.incident_id))
+
+        with self.assertRaisesRegex(SafetyWorkflowError, "already linked"):
+            link_safety_incidents(
+                routine.incident_id,
+                critical.incident_id,
+                self.closer.user_id,
+                link_type="recurrence",
+                rationale="Attempt to duplicate the same incident pair.",
+            )
