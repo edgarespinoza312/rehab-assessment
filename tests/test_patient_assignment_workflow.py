@@ -552,5 +552,54 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         self.assertNotIn("Confidential patient plan", response.get_data(as_text=True))
 
 
+    def test_active_workout_access_is_revoked_when_patient_assignment_ends(self):
+        from core.workout import WorkoutPrescription
+        from dashboard.services.workout_persistence import create_workout_plan
+
+        plan = create_workout_plan(
+            "Runtime revocation plan",
+            (WorkoutPrescription("bicep_curl", "left", 4),),
+            patient_id=self.patient_id,
+        )
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        assigned = self.login(app.test_client(), "clinician1@workflow.test")
+
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        started = assigned.post(
+            "/workout/start",
+            json={"plan_id": plan.plan_id, "patient_id": self.patient_id},
+            headers={"X-CSRF-Token": self.csrf(assigned)},
+        )
+        self.assertEqual(started.status_code, 201)
+
+        revoked = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "revoke",
+                "reason": "Care ended during workout",
+                "filter": "all",
+            },
+        )
+        self.assertEqual(revoked.status_code, 302)
+
+        for endpoint in ("/workout/session", "/video_status"):
+            with self.subTest(endpoint=endpoint):
+                response = assigned.get(endpoint)
+                self.assertEqual(response.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()
