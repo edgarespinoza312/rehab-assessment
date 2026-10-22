@@ -679,6 +679,18 @@ def assert_safety_scope_allowed(scope: str):
 
 
 def safety_incident_to_dict(incident: SafetyIncident, *, include_events: bool = False) -> dict:
+    try:
+        restriction_scopes = json.loads(incident.restriction_scopes or "[]")
+        restriction_state_valid = (
+            isinstance(restriction_scopes, list)
+            and all(isinstance(scope, str) for scope in restriction_scopes)
+            and set(restriction_scopes).issubset(SUPPORTED_RESTRICTION_SCOPES)
+        )
+        if not restriction_state_valid:
+            restriction_scopes = []
+    except (TypeError, json.JSONDecodeError):
+        restriction_scopes = []
+        restriction_state_valid = False
     value = {
         "incident_id": incident.incident_id,
         "incident_key": incident.incident_key,
@@ -693,7 +705,8 @@ def safety_incident_to_dict(incident: SafetyIncident, *, include_events: bool = 
         "risk_score": incident.risk_score,
         "priority_tier": incident.priority_tier,
         "status": incident.status,
-        "restriction_scopes": json.loads(incident.restriction_scopes or "[]"),
+        "restriction_scopes": restriction_scopes,
+        "restriction_state_valid": restriction_state_valid,
         "restriction_reason": incident.restriction_reason,
         "owner_user_id": incident.owner_user_id,
         "root_cause_status": incident.root_cause_status,
