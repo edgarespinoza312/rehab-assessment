@@ -68,6 +68,7 @@ jobs:
               "safety_incident_links",
               "assessment_corrections",
               "assessment_correction_events",
+              "patient_review_delegations",
           }
 
           with app.app_context():
