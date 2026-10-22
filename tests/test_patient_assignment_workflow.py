@@ -564,7 +564,8 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
 
         admin = app.test_client()
         self.login(admin, "admin@workflow.test")
-        assigned = self.login(app.test_client(), "clinician1@workflow.test")
+        assigned = app.test_client()
+        self.login(assigned, "clinician1@workflow.test")
 
         response = admin.post(
             f"/patients/{self.patient_id}/assignment",
