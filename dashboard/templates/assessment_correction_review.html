@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Review Assessment Correction | Revaliv{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h1>Independent Assessment Correction Review</h1>
+    <p>This page exposes only the correction request and its provenance, not the patient's full clinical history.</p>
+</section>
+
+{% if error %}
+<section class="card" role="alert"><strong>Review could not be completed.</strong> {{ error }}</section>
+{% endif %}
+{% if result %}
+<section class="card" role="status">Correction review result: {{ result|title }}.</section>
+{% endif %}
+
+<section class="card">
+    <h2>Correction #{{ correction.correction_id }}</h2>
+    <dl>
+        <dt>Status</dt><dd>{{ correction.status|title }}</dd>
+        <dt>Assessment record</dt><dd>#{{ correction.assessment_id }}</dd>
+        <dt>Field</dt><dd>{{ correction.field_name }}</dd>
+        <dt>Recorded value</dt><dd><code>{{ correction.original_value|tojson }}</code></dd>
+        <dt>Proposed value</dt><dd><code>{{ correction.proposed_value|tojson }}</code></dd>
+        <dt>Reason</dt><dd>{{ correction.reason }}</dd>
+        <dt>Evidence reference</dt><dd>{{ correction.evidence_reference or "Not provided" }}</dd>
+        <dt>Source snapshot SHA-256</dt><dd><code>{{ correction.source_snapshot_hash }}</code></dd>
+        {% if correction.review_rationale %}
+        <dt>Prior review rationale</dt><dd>{{ correction.review_rationale }}</dd>
+        {% endif %}
+    </dl>
+    {% if not correction.event_chain_valid %}
+    <p role="alert"><strong>Audit integrity failure.</strong> Review is disabled until the correction history is investigated.</p>
+    {% endif %}
+    {% if correction.status == "pending" and correction.event_chain_valid %}
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="review-rationale">Independent reviewer rationale</label>
+        <textarea id="review-rationale" name="rationale" minlength="8" maxlength="4000" required></textarea>
+        <div class="button-row">
+            <button class="btn btn-primary" name="decision" value="accept" type="submit">Accept correction overlay</button>
+            <button class="btn" name="decision" value="reject" type="submit">Reject correction request</button>
+        </div>
+    </form>
+    {% else %}
+    <p>This correction is not eligible for another review transition.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Audit history</h2>
+    {% if correction.events %}
+    <ol>
+        {% for event in correction.events %}
+        <li>
+            {{ event.occurred_at }} — {{ event.event_type|replace("_", " ")|title }}
+            ({{ event.previous_status }} → {{ event.new_status }})
+            <p>{{ event.detail }}</p>
+            <small>Event hash: {{ event.event_hash }}</small>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p>No event history is available.</p>
+    {% endif %}
+</section>
+{% endblock %}
