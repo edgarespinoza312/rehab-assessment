@@ -110,22 +110,22 @@ class JointAnalyzer:
         JointType.RIGHT_WRIST,
     )
 
-    metrics.shoulder_angle_left = self._calculate_angle_from_types(
-        skeleton,
-        JointType.LEFT_ELBOW,
-        JointType.LEFT_SHOULDER,
-        JointType.LEFT_HIP,
-    )
-    metrics.shoulder_angle_right = self._calculate_angle_from_types(
-        skeleton,
-        JointType.RIGHT_ELBOW,
-        JointType.RIGHT_SHOULDER,
-        JointType.RIGHT_HIP,
-    )
+        metrics.shoulder_angle_left = self._calculate_angle_from_types(
+            skeleton,
+            JointType.LEFT_ELBOW,
+            JointType.LEFT_SHOULDER,
+            JointType.LEFT_HIP,
+        )
+        metrics.shoulder_angle_right = self._calculate_angle_from_types(
+            skeleton,
+            JointType.RIGHT_ELBOW,
+            JointType.RIGHT_SHOULDER,
+            JointType.RIGHT_HIP,
+        )
 
-    # ------------------------------------------------------
-    # Select Active Measurement
-    # ------------------------------------------------------
+        # ------------------------------------------------------
+        # Select Active Measurement
+        # ------------------------------------------------------
 
         if (
             profile is not None
