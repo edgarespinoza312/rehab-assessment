@@ -19,6 +19,7 @@ from dashboard.models.safety import (
     SafetyCorrectiveAction,
     SafetyIncident,
     SafetyIncidentEvent,
+    SafetyIncidentLink,
 )
 
 
@@ -652,6 +653,108 @@ def reopen_safety_incident(
         db.session.rollback()
         raise
     return incident
+
+
+def link_safety_incidents(
+    incident_id: int,
+    related_incident_id: int,
+    actor_user_id: int,
+    *,
+    link_type: str,
+    rationale: str,
+) -> SafetyIncidentLink:
+    """Link distinct case records and escalate review for systemic signals."""
+    actor = _require_safety_lead(actor_user_id)
+    if (
+        isinstance(incident_id, bool)
+        or not isinstance(incident_id, int)
+        or isinstance(related_incident_id, bool)
+        or not isinstance(related_incident_id, int)
+        or incident_id == related_incident_id
+    ):
+        raise SafetyWorkflowError("two distinct valid incident IDs are required")
+    allowed_types = {
+        "shared_mechanism", "recurrence", "cross_case_signal", "shared_exposure"
+    }
+    if not isinstance(link_type, str) or link_type not in allowed_types:
+        raise SafetyWorkflowError("unsupported incident link type")
+    rationale = _validate_text(rationale, "link rationale", 8, _MAX_RATIONALE)
+    first = db.session.get(SafetyIncident, incident_id)
+    second = db.session.get(SafetyIncident, related_incident_id)
+    if first is None or second is None:
+        raise LookupError("one or both safety incidents do not exist")
+    if SafetyIncidentLink.query.filter(
+        ((SafetyIncidentLink.incident_id == incident_id) &
+         (SafetyIncidentLink.related_incident_id == related_incident_id))
+        | ((SafetyIncidentLink.incident_id == related_incident_id) &
+           (SafetyIncidentLink.related_incident_id == incident_id))
+    ).first() is not None:
+        raise SafetyWorkflowError("these incident records are already linked")
+
+    _guard_chain(first)
+    _guard_chain(second)
+    now = datetime.utcnow()
+    try:
+        link = SafetyIncidentLink(
+            incident_id=incident_id,
+            related_incident_id=related_incident_id,
+            link_type=link_type,
+            rationale=rationale,
+            created_by_user_id=actor.user_id,
+            created_at=now,
+        )
+        db.session.add(link)
+        db.session.flush()
+
+        pair = (first, second)
+        priority_order = {"routine": 0, "elevated": 1, "urgent": 2, "critical": 3}
+        strongest_tier = max(
+            (first.priority_tier, second.priority_tier),
+            key=lambda tier: priority_order.get(tier, 3),
+        )
+        systemic_signal = link_type in {"cross_case_signal", "shared_mechanism"}
+        critical_signal = systemic_signal and strongest_tier == "critical"
+        for item in pair:
+            previous_status = item.status
+            item.next_review_at = min(item.next_review_at, now + timedelta(hours=1))
+            item.response_due_at = min(item.response_due_at, now + timedelta(hours=1))
+            if systemic_signal:
+                item.priority_tier = strongest_tier
+                item.risk_score = max(first.risk_score, second.risk_score)
+            if critical_signal:
+                scopes = _normalize_scopes(json.loads(item.restriction_scopes or "[]"))
+                scopes = sorted(set(scopes).union(DEFAULT_CRITICAL_RESTRICTIONS))
+                item.restriction_scopes = json.dumps(scopes)
+                item.restriction_reason = (
+                    "Precautionary cross-case systemic-signal hold pending independent triage."
+                )
+                item.status = "restricted"
+            elif item.status == "closed" and link_type in {
+                "cross_case_signal", "shared_mechanism", "recurrence"
+            }:
+                item.status = "reopened"
+                item.closed_at = None
+                item.closed_by_user_id = None
+                item.closure_rationale = None
+                item.independent_reviewer_user_id = None
+            item.updated_at = now
+            detail = json.dumps({
+                "link_id": link.link_id,
+                "related_incident_id": second.incident_id if item is first else first.incident_id,
+                "link_type": link_type,
+                "aggregate_priority_tier": strongest_tier if systemic_signal else None,
+                "critical_hold_applied": critical_signal,
+                "rationale": rationale,
+            }, sort_keys=True)
+            _append_event(
+                item, actor.user_id, "cross_case_signal_linked",
+                previous_status, detail,
+            )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return link
 
 
 def active_safety_restrictions(scope: str) -> list[SafetyIncident]:
