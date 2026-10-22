@@ -110,21 +110,46 @@ class JointAnalyzer:
         JointType.RIGHT_WRIST,
     )
 
+    metrics.shoulder_angle_left = self._calculate_angle_from_types(
+        skeleton,
+        JointType.LEFT_ELBOW,
+        JointType.LEFT_SHOULDER,
+        JointType.LEFT_HIP,
+    )
+    metrics.shoulder_angle_right = self._calculate_angle_from_types(
+        skeleton,
+        JointType.RIGHT_ELBOW,
+        JointType.RIGHT_SHOULDER,
+        JointType.RIGHT_HIP,
+    )
+
     # ------------------------------------------------------
     # Select Active Measurement
     # ------------------------------------------------------
 
         if (
             profile is not None
-            and profile.exercise == ExerciseType.LEFT_BICEP_CURL
+            and profile.exercise in {
+                ExerciseType.LEFT_BICEP_CURL,
+                ExerciseType.LEFT_TRICEP_EXTENSION,
+            }
         ):
             active_angle = metrics.elbow_angle_left
 
         elif (
             profile is not None
-            and profile.exercise == ExerciseType.RIGHT_BICEP_CURL
+            and profile.exercise in {
+                ExerciseType.RIGHT_BICEP_CURL,
+                ExerciseType.RIGHT_TRICEP_EXTENSION,
+            }
         ):
             active_angle = metrics.elbow_angle_right
+
+        elif profile is not None and profile.exercise == ExerciseType.LEFT_SHOULDER_ABDUCTION:
+            active_angle = metrics.shoulder_angle_left
+
+        elif profile is not None and profile.exercise == ExerciseType.RIGHT_SHOULDER_ABDUCTION:
+            active_angle = metrics.shoulder_angle_right
 
         elif metrics.elbow_angle_left is not None:
 
