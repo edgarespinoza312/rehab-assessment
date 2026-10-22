@@ -183,6 +183,53 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
             200,
         )
 
+
+    def test_progression_and_advisory_apis_enforce_active_assignment(self):
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        protected_endpoints = [
+            f"/api/patients/{self.patient_id}/progression",
+            f"/api/patients/{self.patient_id}/progression/context",
+            f"/api/patients/{self.patient_id}/progression/advisory",
+            f"/api/patients/{self.patient_id}/progression/advisory/reviews",
+        ]
+
+        unassigned_clinician = app.test_client()
+        self.login(unassigned_clinician, "clinician2@workflow.test")
+        for endpoint in protected_endpoints:
+            with self.subTest(endpoint=endpoint):
+                response = unassigned_clinician.get(endpoint)
+                self.assertEqual(response.status_code, 403)
+
+        assigned_clinician = app.test_client()
+        self.login(assigned_clinician, "clinician1@workflow.test")
+        expected_statuses = [200, 200, 200, 400]
+        for endpoint, expected_status in zip(
+            protected_endpoints, expected_statuses
+        ):
+            with self.subTest(endpoint=endpoint):
+                response = assigned_clinician.get(endpoint)
+                self.assertEqual(response.status_code, expected_status)
+
+        self.assertEqual(
+            PatientAssignment.query.filter_by(
+                patient_id=self.patient_id,
+                ended_at=None,
+            ).count(),
+            1,
+        )
+
     def test_admin_revocation_removes_access_but_keeps_audit_record(self):
         admin = app.test_client()
         self.login(admin, "admin@workflow.test")
