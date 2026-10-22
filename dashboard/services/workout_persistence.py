@@ -1,5 +1,7 @@
 """Persistence boundary for reusable workout plans and completed sessions."""
 
+import hashlib
+import hmac
 import json
 from datetime import datetime
 from statistics import fmean
@@ -22,11 +24,15 @@ from dashboard.models import (
     WorkoutExerciseResult,
     WorkoutPlan,
     WorkoutPlanExercise,
+    WorkoutPlanReviewEvent,
+    User,
 )
 
 MAX_WORKOUT_PLAN_NAME_LENGTH = 120
 MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH = 10_000
 MAX_WORKOUT_PLAN_EXERCISES = 50
+MAX_PLAN_REVIEW_RATIONALE_LENGTH = 4000
+_EMPTY_REVIEW_HASH = "0" * 64
 
 
 def _ensure_exercise_identities() -> None:
@@ -42,6 +48,7 @@ def create_workout_plan(
     *,
     patient_id: int | None = None,
     description: str = "",
+    created_by_user_id: int | None = None,
 ) -> WorkoutPlan:
     """Validate and persist an ordered workout plan using registered profiles."""
     prescriptions = tuple(exercises)
@@ -69,6 +76,16 @@ def create_workout_plan(
             f"{MAX_WORKOUT_PLAN_DESCRIPTION_LENGTH} characters"
         )
     normalized_description = description.strip()
+    if created_by_user_id is not None:
+        if (
+            isinstance(created_by_user_id, bool)
+            or not isinstance(created_by_user_id, int)
+            or created_by_user_id <= 0
+        ):
+            raise ValueError("created_by_user_id must be a positive integer or null")
+        creator = db.session.get(User, created_by_user_id)
+        if creator is None or creator.status != "ACTIVE":
+            raise ValueError("plan creator does not exist or is disabled")
     if not prescriptions:
         raise ValueError("a workout plan must contain at least one exercise")
     if len(prescriptions) > MAX_WORKOUT_PLAN_EXERCISES:
@@ -91,6 +108,7 @@ def create_workout_plan(
             patient_id=patient_id,
             name=normalized_name,
             description=normalized_description,
+            created_by_user_id=created_by_user_id,
             exercises=[
                 WorkoutPlanExercise(
                     position=position,
@@ -116,6 +134,8 @@ def load_workout_preset(
     plan_id: int,
     *,
     patient_id: int | None = None,
+    require_approved: bool = False,
+    allow_engineering_only: bool = False,
 ) -> WorkoutPreset:
     """Load a shared or patient-authorized plan as a domain preset."""
     plan = db.session.get(WorkoutPlan, plan_id)
@@ -123,6 +143,11 @@ def load_workout_preset(
         patient_id is not None and plan.patient_id not in (None, patient_id)
     ):
         raise LookupError(f"workout plan {plan_id} does not exist")
+    if require_approved:
+        if plan.approval_status != "approved":
+            raise ValueError("workout plan is not clinician-approved")
+        if not verify_workout_plan_review_chain(plan.plan_id):
+            raise ValueError("workout plan review history integrity check failed; activation blocked")
     prescriptions = tuple(
         WorkoutPrescription(
             exercise_id=item.exercise_id,
@@ -145,7 +170,168 @@ def load_workout_preset(
         exercises=prescriptions,
     )
     preset.validate(BUILTIN_EXERCISES)
+    if not allow_engineering_only:
+        for prescription in prescriptions:
+            profile = BUILTIN_EXERCISES.get(prescription.exercise_id).profile_for_side(
+                prescription.side
+            )
+            if profile.validation_status == "engineering_only":
+                raise ValueError(
+                    f"{profile.display_name} is not enabled for clinical sessions"
+                )
     return preset
+
+
+def _review_event_hash(
+    *,
+    plan_id: int,
+    reviewer_user_id: int,
+    decision: str,
+    previous_status: str,
+    new_status: str,
+    rationale: str,
+    occurred_at: datetime,
+    previous_hash: str,
+) -> str:
+    payload = {
+        "plan_id": plan_id,
+        "reviewer_user_id": reviewer_user_id,
+        "decision": decision,
+        "previous_status": previous_status,
+        "new_status": new_status,
+        "rationale": rationale,
+        "occurred_at": occurred_at.isoformat(timespec="microseconds"),
+        "previous_hash": previous_hash,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def verify_workout_plan_review_chain(plan_id: int) -> bool:
+    """Verify that all plan-review records link by hash and match current status."""
+    plan = db.session.get(WorkoutPlan, plan_id)
+    if plan is None:
+        return False
+    events = WorkoutPlanReviewEvent.query.filter_by(plan_id=plan_id).order_by(
+        WorkoutPlanReviewEvent.event_id
+    ).all()
+    if not events:
+        return False
+    expected_previous_hash = _EMPTY_REVIEW_HASH
+    for event in events:
+        if event.previous_hash != expected_previous_hash:
+            return False
+        expected_hash = _review_event_hash(
+            plan_id=event.plan_id,
+            reviewer_user_id=event.reviewer_user_id,
+            decision=event.decision,
+            previous_status=event.previous_status,
+            new_status=event.new_status,
+            rationale=event.rationale,
+            occurred_at=event.occurred_at,
+            previous_hash=event.previous_hash,
+        )
+        if not hmac.compare_digest(expected_hash, event.event_hash):
+            return False
+        expected_previous_hash = event.event_hash
+    latest = events[-1]
+    if latest.new_status != plan.approval_status:
+        return False
+    if plan.approval_status == "approved":
+        return (
+            latest.decision == "approve"
+            and plan.approved_by_user_id == latest.reviewer_user_id
+            and plan.approved_at == latest.occurred_at
+        )
+    return plan.approved_by_user_id is None and plan.approved_at is None
+
+
+def review_workout_plan(
+    plan_id: int,
+    reviewer_user_id: int,
+    decision: str,
+    rationale: str,
+) -> tuple[WorkoutPlan, WorkoutPlanReviewEvent]:
+    """Apply a role-checked plan review and append its hash-linked audit event."""
+    if decision not in {"approve", "reject", "suspend"}:
+        raise ValueError("decision must be approve, reject, or suspend")
+    if not isinstance(rationale, str) or not rationale.strip():
+        raise ValueError("a review rationale is required")
+    rationale = rationale.strip()
+    if len(rationale) > MAX_PLAN_REVIEW_RATIONALE_LENGTH:
+        raise ValueError(
+            f"review rationale must be at most {MAX_PLAN_REVIEW_RATIONALE_LENGTH} characters"
+        )
+    reviewer = db.session.get(User, reviewer_user_id)
+    if reviewer is None or reviewer.status != "ACTIVE":
+        raise ValueError("reviewer does not exist or is disabled")
+    if not any(role.name == "CLINICIAN" for role in reviewer.roles):
+        raise ValueError("only an active clinician may review a workout plan")
+
+    plan = db.session.get(WorkoutPlan, plan_id)
+    if plan is None:
+        raise LookupError(f"workout plan {plan_id} does not exist")
+    if decision == "approve" and (
+        plan.created_by_user_id is not None
+        and plan.created_by_user_id == reviewer_user_id
+    ):
+        raise ValueError("the plan author cannot approve their own plan")
+
+    transitions = {
+        "draft": {"approve": "approved", "reject": "rejected"},
+        "rejected": {},
+        "approved": {"suspend": "suspended"},
+        "suspended": {"approve": "approved", "reject": "rejected"},
+    }
+    new_status = transitions.get(plan.approval_status, {}).get(decision)
+    if new_status is None:
+        raise ValueError(
+            f"cannot apply decision {decision!r} to plan status {plan.approval_status!r}"
+        )
+    existing_events = WorkoutPlanReviewEvent.query.filter_by(plan_id=plan_id).order_by(
+        WorkoutPlanReviewEvent.event_id
+    ).all()
+    if existing_events and not verify_workout_plan_review_chain(plan_id):
+        raise ValueError("plan review history integrity check failed")
+    previous_hash = existing_events[-1].event_hash if existing_events else _EMPTY_REVIEW_HASH
+    previous_status = plan.approval_status
+    occurred_at = datetime.utcnow()
+    event_hash = _review_event_hash(
+        plan_id=plan_id,
+        reviewer_user_id=reviewer_user_id,
+        decision=decision,
+        previous_status=previous_status,
+        new_status=new_status,
+        rationale=rationale,
+        occurred_at=occurred_at,
+        previous_hash=previous_hash,
+    )
+    event = WorkoutPlanReviewEvent(
+        plan_id=plan_id,
+        reviewer_user_id=reviewer_user_id,
+        decision=decision,
+        previous_status=previous_status,
+        new_status=new_status,
+        rationale=rationale,
+        occurred_at=occurred_at,
+        previous_hash=previous_hash,
+        event_hash=event_hash,
+    )
+    try:
+        plan.approval_status = new_status
+        plan.approval_note = rationale
+        if new_status == "approved":
+            plan.approved_by_user_id = reviewer_user_id
+            plan.approved_at = occurred_at
+        else:
+            plan.approved_by_user_id = None
+            plan.approved_at = None
+        db.session.add(event)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return plan, event
 
 
 def list_workout_plans(patient_id: int) -> list[dict]:
@@ -164,6 +350,10 @@ def list_workout_plans(patient_id: int) -> list[dict]:
         "patient_id": plan.patient_id,
         "scope": "shared" if plan.patient_id is None else "patient",
         "exercise_count": len(plan.exercises),
+        "approval_status": plan.approval_status,
+        "created_by_user_id": plan.created_by_user_id,
+        "approved_by_user_id": plan.approved_by_user_id,
+        "approved_at": plan.approved_at.isoformat() if plan.approved_at else None,
     } for plan in plans]
 
 
