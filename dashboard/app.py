@@ -2002,6 +2002,14 @@ def start_assessment():
     ):
         return jsonify({"error": "forbidden"}), 403
 
+    try:
+        assert_safety_scope_allowed("clinical_assessment_start")
+    except SafetyRestrictionError as error:
+        return jsonify({
+            "error": str(error),
+            "restriction_scope": error.scope,
+            "incident_keys": [item.incident_key for item in error.incidents],
+        }), 423
 
     new_session = AssessmentSession(
         exercise=exercise_type,
@@ -2099,6 +2107,16 @@ def start_workout():
         patient_id,
     ):
         return jsonify({"error": "forbidden"}), 403
+    try:
+        assert_safety_scope_allowed("workout_activation")
+        if selected_plan_id is not None:
+            assert_safety_scope_allowed("plan_activation")
+    except SafetyRestrictionError as error:
+        return jsonify({
+            "error": str(error),
+            "restriction_scope": error.scope,
+            "incident_keys": [item.incident_key for item in error.incidents],
+        }), 423
     if selected_plan_id is not None:
         try:
             preset = load_workout_preset(
