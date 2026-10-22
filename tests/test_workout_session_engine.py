@@ -221,3 +221,54 @@ class SessionEngineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class RepetitionDataIntegrityTests(unittest.TestCase):
+    def _ready_engine(self):
+        engine = SessionEngine()
+        engine.start(preset(WorkoutPrescription("bicep_curl", "left", 2)), patient_id=7)
+        engine.calibration_succeeded()
+        engine.begin_exercise()
+        return engine
+
+    def test_non_finite_or_out_of_range_scores_cannot_count_as_repetitions(self):
+        invalid_results = (
+            AssessmentResult(overall_score=float("nan")),
+            AssessmentResult(rom_score=float("inf")),
+            AssessmentResult(tempo_score=101.0),
+            AssessmentResult(completion_score=-0.1),
+            AssessmentResult(stability_score=True),
+        )
+        for result in invalid_results:
+            with self.subTest(result=result):
+                engine = self._ready_engine()
+                state = ExerciseState(
+                    exercise_name="LEFT_BICEP_CURL",
+                    active=True,
+                    repetitions=1,
+                    rep_completed=True,
+                )
+                self.assertFalse(engine.record_repetition(state, result))
+                self.assertEqual(engine.snapshot().completed_repetitions, 0)
+                self.assertEqual(engine.status, SessionStatus.EXERCISING)
+
+    def test_malformed_or_oversized_feedback_is_rejected(self):
+        for feedback in ("not-a-list", [None], ["x" * 1001], ["feedback"] * 51):
+            with self.subTest(feedback_type=type(feedback).__name__, length=len(feedback)):
+                engine = self._ready_engine()
+                state = ExerciseState(
+                    exercise_name="LEFT_BICEP_CURL",
+                    active=True,
+                    repetitions=1,
+                    rep_completed=True,
+                )
+                result = AssessmentResult(feedback=feedback)
+                self.assertFalse(engine.record_repetition(state, result))
+                self.assertEqual(engine.snapshot().completed_repetitions, 0)
+
+    def test_valid_scores_are_still_recorded(self):
+        engine = self._ready_engine()
+        state, result = completed_event(88, "LEFT_BICEP_CURL")
+        self.assertTrue(engine.record_repetition(state, result))
+        self.assertEqual(engine.snapshot().completed_repetitions, 1)
