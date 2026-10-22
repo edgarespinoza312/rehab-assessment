@@ -79,6 +79,8 @@ from tests.support.auth import login_client, seed_clinician
 
 class DashboardAssessmentStateSyncTests(unittest.TestCase):
     def setUp(self):
+        # Exercise engineering workflows explicitly; production configuration forbids this opt-in.
+        dashboard.app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         with dashboard.app.app_context():
             if db.session.get(Patient, 8) is None:
                 db.session.add(Patient(
