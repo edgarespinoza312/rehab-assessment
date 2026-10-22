@@ -19,7 +19,7 @@ from dashboard.database import db, migrate
 
 # Import models so SQLA
 # lchemy knows they exist
-from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan
+from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan, SafetyIncident, SafetyCorrectiveAction
 from dashboard.services.authentication import (
     current_identity,
     csrf_token,
@@ -126,6 +126,20 @@ from dashboard.services.workout_persistence import (
     load_workout_preset,
     persist_workout_session,
     review_workout_plan,
+)
+from dashboard.services.safety_incidents import (
+    SafetyWorkflowError,
+    SafetyRestrictionError,
+    active_safety_restrictions,
+    assert_safety_scope_allowed,
+    close_safety_incident,
+    create_corrective_action,
+    record_independent_safety_review,
+    reopen_safety_incident,
+    report_safety_incident,
+    safety_incident_to_dict,
+    triage_safety_incident,
+    update_corrective_action,
 )
 from dashboard.services.progression import (
     get_patient_progression,
@@ -3363,6 +3377,277 @@ def discard_assessment():
     if any(role.value == "PATIENT" for role in identity.roles):
         return redirect(url_for("patient_home"))
     return redirect(url_for("home"))
+
+
+
+# ==========================================================
+# Safety Incident and Corrective-Action Governance
+# ==========================================================
+
+_SAFETY_LEAD_ROLE_NAMES = {"ADMIN", "CLINICIAN", "OPERATOR"}
+
+
+def _identity_can_manage_safety(identity):
+    return any(role.value in _SAFETY_LEAD_ROLE_NAMES for role in identity.roles)
+
+
+def _safety_error_response(error, status=400):
+    return jsonify({"error": str(error)}), status
+
+
+@app.route("/api/safety/incidents", methods=["GET", "POST"])
+@require_auth
+def safety_incident_collection():
+    identity = current_identity()
+    if request.method == "GET":
+        if not _identity_can_manage_safety(identity):
+            return jsonify({"error": "safety-lead authorization required"}), 403
+        incidents = SafetyIncident.query.order_by(
+            SafetyIncident.reported_at.desc()
+        ).limit(500).all()
+        return jsonify({
+            "incidents": [
+                safety_incident_to_dict(item, include_events=False)
+                for item in incidents
+            ],
+        })
+
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = report_safety_incident(
+            identity.user_id,
+            category=payload.get("category"),
+            summary=payload.get("summary"),
+            details=payload.get("details", ""),
+            severity=payload.get("severity"),
+            likelihood=payload.get("likelihood"),
+            evidence_strength=payload.get("evidence_strength"),
+            exposure_count=payload.get("exposure_count", 1),
+            control_failure=payload.get("control_failure", False),
+            restriction_scopes=payload.get("restriction_scopes"),
+            restriction_reason=payload.get("restriction_reason"),
+        )
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 400)
+    return jsonify(safety_incident_to_dict(incident, include_events=True)), 201
+
+
+@app.route("/api/safety/incidents/<int:incident_id>", methods=["GET"])
+@require_auth
+def safety_incident_detail(incident_id):
+    identity = current_identity()
+    incident = db.session.get(SafetyIncident, incident_id)
+    if incident is None:
+        return jsonify({"error": "safety incident not found"}), 404
+    if (
+        identity.user_id != incident.reporter_user_id
+        and not _identity_can_manage_safety(identity)
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/triage", methods=["POST"])
+@require_auth
+def safety_incident_triage(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = triage_safety_incident(
+            incident_id,
+            identity.user_id,
+            owner_user_id=payload.get("owner_user_id"),
+            root_cause_status=payload.get("root_cause_status"),
+            root_cause_notes=payload.get("root_cause_notes"),
+            restriction_scopes=payload.get("restriction_scopes"),
+            restriction_reason=payload.get("restriction_reason"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/actions", methods=["POST"])
+@require_auth
+def safety_incident_create_action(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        due_at_value = payload.get("due_at")
+        if not isinstance(due_at_value, str):
+            raise SafetyWorkflowError("due_at must be an ISO-8601 datetime string")
+        try:
+            due_at = datetime.fromisoformat(due_at_value.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise SafetyWorkflowError("due_at must be a valid ISO-8601 datetime string") from error
+        action = create_corrective_action(
+            incident_id,
+            identity.user_id,
+            title=payload.get("title"),
+            description=payload.get("description", ""),
+            owner_user_id=payload.get("owner_user_id"),
+            due_at=due_at,
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify({
+        "action_id": action.action_id,
+        "incident_id": action.incident_id,
+        "title": action.title,
+        "owner_user_id": action.owner_user_id,
+        "status": action.status,
+        "due_at": action.due_at.isoformat(),
+    }), 201
+
+
+@app.route(
+    "/api/safety/incidents/<int:incident_id>/actions/<int:action_id>/status",
+    methods=["POST"],
+)
+@require_auth
+def safety_incident_action_status(incident_id, action_id):
+    identity = current_identity()
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        action = update_corrective_action(
+            incident_id,
+            action_id,
+            identity.user_id,
+            status=payload.get("status"),
+            evidence=payload.get("evidence"),
+            effectiveness_result=payload.get("effectiveness_result"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify({
+        "action_id": action.action_id,
+        "incident_id": action.incident_id,
+        "status": action.status,
+        "completed_at": action.completed_at.isoformat() if action.completed_at else None,
+        "verified_at": action.verified_at.isoformat() if action.verified_at else None,
+    })
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/review", methods=["POST"])
+@require_auth
+def safety_incident_independent_review(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = record_independent_safety_review(
+            incident_id,
+            identity.user_id,
+            payload.get("rationale"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/close", methods=["POST"])
+@require_auth
+def safety_incident_close(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = close_safety_incident(
+            incident_id,
+            identity.user_id,
+            rationale=payload.get("rationale"),
+            root_cause_status=payload.get("root_cause_status"),
+            root_cause_notes=payload.get("root_cause_notes"),
+            external_board_reference=payload.get("external_board_reference"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/reopen", methods=["POST"])
+@require_auth
+def safety_incident_reopen(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = reopen_safety_incident(
+            incident_id,
+            identity.user_id,
+            trigger=payload.get("trigger"),
+            details=payload.get("details"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/restrictions/<scope>", methods=["GET"])
+@require_auth
+def safety_restriction_status(scope):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    try:
+        restrictions = active_safety_restrictions(scope)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 400)
+    return jsonify({
+        "scope": scope,
+        "active": bool(restrictions),
+        "incidents": [
+            {
+                "incident_id": incident.incident_id,
+                "incident_key": incident.incident_key,
+                "priority_tier": incident.priority_tier,
+                "restriction_reason": incident.restriction_reason,
+                "reported_at": incident.reported_at.isoformat(),
+                "response_due_at": incident.response_due_at.isoformat(),
+            }
+            for incident in restrictions
+        ],
+    })
 
 # ==========================================================
 # Application Entry
