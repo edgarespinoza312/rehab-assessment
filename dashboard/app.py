@@ -19,7 +19,7 @@ from dashboard.database import db, migrate
 
 # Import models so SQLA
 # lchemy knows they exist
-from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User
+from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan
 from dashboard.services.authentication import (
     current_identity,
     csrf_token,
@@ -125,6 +125,7 @@ from dashboard.services.workout_persistence import (
     list_workout_plans,
     load_workout_preset,
     persist_workout_session,
+    review_workout_plan,
 )
 from dashboard.services.progression import (
     get_patient_progression,
@@ -1332,6 +1333,7 @@ def save_workout_plan():
             prescriptions,
             patient_id=patient_id,
             description=description,
+            created_by_user_id=identity.user_id,
         )
     except (TypeError, ValueError) as error:
         return jsonify({"error": str(error)}), 400
@@ -1341,7 +1343,49 @@ def save_workout_plan():
         "name": plan.name,
         "patient_id": plan.patient_id,
         "exercise_count": len(plan.exercises),
+        "approval_status": plan.approval_status,
     }), 201
+
+
+@app.route("/workout/plans/<int:plan_id>/review", methods=["POST"])
+@require_auth
+def review_workout_plan_route(plan_id: int):
+    identity = current_identity()
+    require_csrf()
+    roles = {role.value for role in identity.roles}
+    if "CLINICIAN" not in roles:
+        return jsonify({"error": "only clinicians may review workout plans"}), 403
+    plan = db.session.get(WorkoutPlan, plan_id)
+    if plan is None:
+        return jsonify({"error": f"workout plan {plan_id} does not exist"}), 404
+    if plan.patient_id is not None and not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, plan.patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    decision = payload.get("decision")
+    rationale = payload.get("rationale")
+    try:
+        reviewed_plan, event = review_workout_plan(
+            plan_id,
+            reviewer_user_id=identity.user_id,
+            decision=decision,
+            rationale=rationale,
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify({
+        "plan_id": reviewed_plan.plan_id,
+        "approval_status": reviewed_plan.approval_status,
+        "review_event_id": event.event_id,
+        "review_event_hash": event.event_hash,
+        "reviewed_at": event.occurred_at.isoformat(),
+    }), 200
+
 
 @app.route("/patients")
 @require_auth
@@ -2046,11 +2090,21 @@ def start_workout():
             preset = load_workout_preset(
                 selected_plan_id,
                 patient_id=patient_id,
+                require_approved=True,
+                allow_engineering_only=bool(
+                    app.config.get("REVALIV_ENABLE_ENGINEERING_EXERCISES", False)
+                ),
             )
         except LookupError:
             return jsonify({"error": f"workout plan {selected_plan_id} does not exist"}), 404
         except ValueError as error:
-            return jsonify({"error": str(error)}), 400
+            message = str(error)
+            status = 409 if (
+                "not clinician-approved" in message
+                or "review history integrity" in message
+                or "not enabled for clinical sessions" in message
+            ) else 400
+            return jsonify({"error": message}), status
 
     context = runtime_context_for_request()
     with context.lock:
