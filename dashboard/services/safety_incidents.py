@@ -270,6 +270,8 @@ def report_safety_incident(
         severity, likelihood, evidence_strength, exposure_count, control_failure
     )
     scopes = _normalize_scopes(restriction_scopes)
+    if restriction_reason is not None and not isinstance(restriction_reason, str):
+        raise SafetyWorkflowError("restriction_reason must be text")
     if tier == "critical":
         scopes = sorted(set(scopes).union(DEFAULT_CRITICAL_RESTRICTIONS))
     if scopes and (not isinstance(restriction_reason, str) or not restriction_reason.strip()):
@@ -353,6 +355,8 @@ def triage_safety_incident(
     if root_cause_status is not None:
         if not isinstance(root_cause_status, str) or root_cause_status not in {"not_assessed", "known", "unknown"}:
             raise SafetyWorkflowError("root_cause_status must be not_assessed, known, or unknown")
+        if root_cause_notes is not None and not isinstance(root_cause_notes, str):
+            raise SafetyWorkflowError("root_cause_notes must be text")
         notes = (root_cause_notes or "").strip()
         if root_cause_status in {"known", "unknown"} and len(notes) < 8:
             raise SafetyWorkflowError("root-cause rationale is required for known or unknown status")
