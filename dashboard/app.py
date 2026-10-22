@@ -1204,6 +1204,174 @@ def assessment_correction_review_route(correction_id):
     return jsonify(correction_to_dict(reviewed, include_events=True)), 200
 
 
+@app.route("/review/queue", methods=["GET"])
+@require_auth
+def review_queue():
+    identity = current_identity()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+
+    plan_items = []
+    correction_items = []
+    grants = PatientReviewDelegation.query.filter_by(
+        delegated_to_user_id=identity.user_id,
+        revoked_at=None,
+    ).order_by(PatientReviewDelegation.created_at.desc()).all()
+    for grant in grants:
+        if not has_active_review_delegation(
+            identity.user_id, grant.patient_id, grant.scope
+        ):
+            continue
+        if grant.scope == "plan_approval":
+            plans = WorkoutPlan.query.filter(
+                WorkoutPlan.patient_id == grant.patient_id,
+                WorkoutPlan.approval_status.in_(("draft", "suspended")),
+                WorkoutPlan.created_by_user_id != identity.user_id,
+            ).order_by(WorkoutPlan.created_at.desc()).all()
+            plan_items.extend(plans)
+        elif grant.scope == "assessment_correction":
+            corrections = AssessmentCorrection.query.filter_by(
+                patient_id=grant.patient_id,
+                status="pending",
+            ).filter(
+                AssessmentCorrection.requested_by_user_id != identity.user_id
+            ).order_by(AssessmentCorrection.requested_at.desc()).all()
+            correction_items.extend(corrections)
+
+    dedup_plans = {plan.plan_id: plan for plan in plan_items}
+    dedup_corrections = {item.correction_id: item for item in correction_items}
+    return render_template(
+        "review_queue.html",
+        plans=list(dedup_plans.values()),
+        corrections=[
+            correction_to_dict(item, include_events=False)
+            for item in dedup_corrections.values()
+        ],
+    )
+
+
+@app.route("/review/assessment-corrections/<int:correction_id>", methods=["GET", "POST"])
+@require_auth
+def assessment_correction_review_page(correction_id):
+    identity = current_identity()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    correction = db.session.get(AssessmentCorrection, correction_id)
+    if correction is None:
+        abort(404)
+    allowed = (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, correction.patient_id, "assessment_correction"
+        )
+    )
+    if not allowed or identity.user_id == correction.requested_by_user_id:
+        abort(404)
+
+    if request.method == "POST":
+        require_csrf()
+        try:
+            reviewed = review_assessment_correction(
+                correction_id,
+                identity.user_id,
+                decision=request.form.get("decision"),
+                rationale=request.form.get("rationale"),
+            )
+        except (LookupError, CorrectionWorkflowError) as error:
+            return render_template(
+                "assessment_correction_review.html",
+                correction=correction_to_dict(correction, include_events=True),
+                error=str(error),
+            ), 409
+        return redirect(url_for(
+            "assessment_correction_review_page",
+            correction_id=reviewed.correction_id,
+            result=reviewed.status,
+        ))
+
+    return render_template(
+        "assessment_correction_review.html",
+        correction=correction_to_dict(correction, include_events=True),
+        error=None,
+        result=request.args.get("result"),
+    )
+
+
+@app.route("/review/workout-plans/<int:plan_id>", methods=["GET", "POST"])
+@require_auth
+def workout_plan_review_page(plan_id):
+    identity = current_identity()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    plan = db.session.get(WorkoutPlan, plan_id)
+    if plan is None:
+        abort(404)
+    allowed = plan.patient_id is None or (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, plan.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, plan.patient_id, "plan_approval"
+        )
+    )
+    if not allowed or identity.user_id == plan.created_by_user_id:
+        abort(404)
+
+    exercises = []
+    from core.workout import BUILTIN_EXERCISES
+    for item in plan.exercises:
+        try:
+            profile = BUILTIN_EXERCISES.get(item.exercise_id).profile_for_side(item.side)
+            maturity = profile.validation_status
+            profile_description = profile.description
+        except (KeyError, ValueError, AttributeError):
+            maturity = "unknown"
+            profile_description = "Profile unavailable; do not approve until investigated."
+        exercises.append({
+            "position": item.position + 1,
+            "exercise_id": item.exercise_id,
+            "side": item.side,
+            "target_repetitions": item.target_repetitions,
+            "resistance_value": float(item.resistance_value) if item.resistance_value is not None else None,
+            "resistance_unit": item.resistance_unit,
+            "validation_status": maturity,
+            "description": profile_description,
+        })
+
+    if request.method == "POST":
+        require_csrf()
+        try:
+            reviewed_plan, event = review_workout_plan(
+                plan_id,
+                reviewer_user_id=identity.user_id,
+                decision=request.form.get("decision"),
+                rationale=request.form.get("rationale"),
+            )
+        except (LookupError, ValueError) as error:
+            plan = db.session.get(WorkoutPlan, plan_id)
+            return render_template(
+                "workout_plan_review.html",
+                plan=plan,
+                exercises=exercises,
+                error=str(error),
+            ), 409
+        return redirect(url_for(
+            "workout_plan_review_page",
+            plan_id=reviewed_plan.plan_id,
+            result=reviewed_plan.approval_status,
+        ))
+
+    return render_template(
+        "workout_plan_review.html",
+        plan=plan,
+        exercises=exercises,
+        error=None,
+        result=request.args.get("result"),
+    )
+
+
 @app.route("/api/assessments/<int:assessment_id>/effective-values", methods=["GET"])
 @require_auth
 def assessment_effective_values_route(assessment_id):
