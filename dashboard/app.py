@@ -2512,7 +2512,10 @@ def start_workout():
                 patient_id=patient_id,
                 require_approved=True,
                 allow_engineering_only=bool(
-                    app.config.get("REVALIV_ENABLE_ENGINEERING_EXERCISES", False)
+                    app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+                ),
+                allow_non_clinically_validated=bool(
+                    app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
                 ),
             )
         except LookupError:
