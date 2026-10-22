@@ -203,6 +203,13 @@ def persist_workout_session(
         raise ValueError("a patient-linked workout session requires patient_id")
     if snapshot.started_at is None or snapshot.ended_at is None:
         raise ValueError("workout session start and completion timestamps are required")
+    if (
+        snapshot.preset_id.startswith("workout_plan_")
+        and workout_plan_id is None
+    ):
+        raise ValueError(
+            "workout_plan_id is required for plan-backed sessions"
+        )
 
     try:
         existing = db.session.query(CompletedWorkoutSession).filter_by(
