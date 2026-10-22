@@ -183,3 +183,48 @@ class SafetyCorrectiveAction(db.Model):
     owner = db.relationship("User", foreign_keys=[owner_user_id])
     created_by = db.relationship("User", foreign_keys=[created_by_user_id])
     verified_by = db.relationship("User", foreign_keys=[verified_by_user_id])
+
+
+class SafetyIncidentLink(db.Model):
+    """Relationship between separate incident records for coordinated review."""
+    __tablename__ = "safety_incident_links"
+    __table_args__ = (
+        db.CheckConstraint(
+            "link_type IN ('shared_mechanism', 'recurrence', 'cross_case_signal', 'shared_exposure')",
+            name="ck_safety_incident_link_type",
+        ),
+        db.CheckConstraint("incident_id != related_incident_id", name="ck_safety_incident_link_not_self"),
+        db.UniqueConstraint("incident_id", "related_incident_id", name="uq_safety_incident_link_pair"),
+    )
+
+    link_id = db.Column(db.Integer, primary_key=True)
+    incident_id = db.Column(
+        db.Integer,
+        db.ForeignKey("safety_incidents.incident_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    related_incident_id = db.Column(
+        db.Integer,
+        db.ForeignKey("safety_incidents.incident_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    link_type = db.Column(db.String(32), nullable=False)
+    rationale = db.Column(db.Text, nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    incident = db.relationship(
+        "SafetyIncident",
+        foreign_keys=[incident_id],
+        back_populates="outgoing_links",
+    )
+    related_incident = db.relationship(
+        "SafetyIncident",
+        foreign_keys=[related_incident_id],
+        back_populates="incoming_links",
+    )
+    created_by = db.relationship("User")
