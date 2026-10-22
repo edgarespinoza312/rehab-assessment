@@ -3,10 +3,11 @@ name: Revaliv tests
 on:
   push:
     branches:
-      - revaliv-current-review
+      - 'revaliv-*'
   pull_request:
     branches:
       - main
+      - revaliv-current-review
 
 permissions:
   contents: read
