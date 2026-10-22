@@ -6,6 +6,7 @@ from .workout import (
     WorkoutExerciseResult,
     WorkoutPlan,
     WorkoutPlanExercise,
+    WorkoutPlanReviewEvent,
 )
 from .review import ProgressionReviewEvent
 from .identity import Role, User, UserRole
