@@ -32,6 +32,14 @@ The review branch now includes a clinician-to-patient assignment workflow, persi
 
 The remaining release gate is an authorization-coverage audit: define the approved access policy (including shared patients, reassignment, unassigned patients, administrator access, and any clinic/tenant boundaries), trace every patient-specific read and write through the enforcement layer, and add cross-clinician isolation tests for each applicable route/API. Confirm that patient lists and indirect access paths follow the same policy. Do not assume the role `CLINICIAN` by itself establishes a treatment relationship, and do not claim multi-clinician production readiness until policy and route coverage are verified.
 
+### Authorization audit findings (static review)
+
+The central authorization service requires an active patient assignment for clinician access to patient profiles, progression, advisory review, and patient/assessment deletion. The patient registry filters non-admin clinicians to assigned or unassigned patients, and patient creation records an assignment to the creating clinician. Existing assignment workflow tests exercise profile access, claim conflicts, reassignment, and revocation.
+
+The current assignment workflow test file does not, by itself, demonstrate cross-clinician isolation for every protected endpoint. Before treating authorization as closed, add parameterized two-clinician tests for the patient profile, historical assessment report, assessment deletion, patient deletion, progression and progression-context APIs, advisory and review APIs, and patient-specific workout-plan reads/writes. For each endpoint, assert the assigned clinician is allowed, the other clinician is denied, and the denied request does not mutate data.
+
+One policy choice also needs an explicit decision: administrators can list all patients and manage assignments, but the central clinical-access policy does not automatically grant administrators access to patient clinical records. Confirm that this separation is intended; do not broaden clinical access solely to make the registry links work. Confirm separately whether unassigned patients should be visible to all clinicians as claimable records and whether assignment changes must revoke access to historical reports immediately.
+
 ### Physical Jetson/camera acceptance test
 
 This cannot be established by GitHub's Ubuntu CI. On the target Jetson, run the full application with the intended camera and record:
