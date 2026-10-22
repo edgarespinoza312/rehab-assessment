@@ -481,5 +481,40 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         self.assertEqual(assessment.notes, "Authorized update")
 
 
+    def test_unassigned_clinician_cannot_start_patient_specific_workout_plan(self):
+        from dashboard.models import WorkoutPlan
+        from core.workout import WorkoutPrescription
+        from dashboard.services.workout_persistence import create_workout_plan
+
+        plan = create_workout_plan(
+            "Assigned patient plan",
+            (WorkoutPrescription("bicep_curl", "left", 4),),
+            patient_id=self.patient_id,
+        )
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        unassigned = app.test_client()
+        self.login(unassigned, "clinician2@workflow.test")
+        response = unassigned.post(
+            "/workout/start",
+            json={"plan_id": plan.plan_id, "patient_id": self.patient_id},
+            headers={"X-CSRF-Token": self.csrf(unassigned)},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(WorkoutPlan.query.filter_by(patient_id=self.patient_id).count(), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
