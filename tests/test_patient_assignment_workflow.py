@@ -600,6 +600,13 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
                 response = assigned.get(endpoint)
                 self.assertEqual(response.status_code, 403)
 
+        cancel = assigned.post(
+            "/workout/cancel",
+            json={},
+            headers={"X-CSRF-Token": self.csrf(assigned)},
+        )
+        self.assertEqual(cancel.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()
