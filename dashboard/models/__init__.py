@@ -14,3 +14,5 @@ from .patient_assignment import PatientAssignment
 from .safety import SafetyIncident, SafetyIncidentEvent, SafetyCorrectiveAction, SafetyIncidentLink
 
 from .assessment_correction import AssessmentCorrection, AssessmentCorrectionEvent
+
+from .patient_review_delegation import PatientReviewDelegation
