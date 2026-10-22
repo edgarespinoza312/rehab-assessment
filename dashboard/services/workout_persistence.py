@@ -136,6 +136,7 @@ def load_workout_preset(
     patient_id: int | None = None,
     require_approved: bool = False,
     allow_engineering_only: bool = False,
+    allow_non_clinically_validated: bool = False,
 ) -> WorkoutPreset:
     """Load a shared or patient-authorized plan as a domain preset."""
     plan = db.session.get(WorkoutPlan, plan_id)
@@ -170,15 +171,27 @@ def load_workout_preset(
         exercises=prescriptions,
     )
     preset.validate(BUILTIN_EXERCISES)
-    if not allow_engineering_only:
-        for prescription in prescriptions:
-            profile = BUILTIN_EXERCISES.get(prescription.exercise_id).profile_for_side(
-                prescription.side
+    for prescription in prescriptions:
+        profile = BUILTIN_EXERCISES.get(prescription.exercise_id).profile_for_side(
+            prescription.side
+        )
+        if profile.validation_status == "engineering_only" and not allow_engineering_only:
+            raise ValueError(
+                f"{profile.display_name} is not enabled for clinical sessions"
             )
-            if profile.validation_status == "engineering_only":
-                raise ValueError(
-                    f"{profile.display_name} is not enabled for clinical sessions"
-                )
+        if (
+            require_approved
+            and profile.validation_status != "clinically_validated"
+            and not allow_non_clinically_validated
+            and not (
+                profile.validation_status == "engineering_only"
+                and allow_engineering_only
+            )
+        ):
+            raise ValueError(
+                f"{profile.display_name} is not clinically validated and is not "
+                "enabled for clinical sessions"
+            )
     return preset
 
 
