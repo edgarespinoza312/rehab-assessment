@@ -1171,3 +1171,11 @@ class FrameMetadataIntegrityTests(unittest.TestCase):
         )
         self.assertEqual(result.status, PoseStatus.INVALID)
         self.assertIn("invalid_image_dimensions", result.quality["reasons"])
+
+
+    def test_out_of_frame_hip_is_rejected_because_it_feeds_shoulder_metrics(self):
+        points = valid_keypoints()
+        points["left_hip"] = (700.0, 350.0, 0.9)
+        decision = validate_landmarks(points, 0.9, 640, 480, exercise_side="left")
+        self.assertFalse(decision.accepted)
+        self.assertIn("landmark_out_of_bounds:left_hip", decision.reasons)
