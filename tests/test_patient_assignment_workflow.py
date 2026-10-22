@@ -596,7 +596,7 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(revoked.status_code, 302)
 
-        for endpoint in ("/workout/session", "/video_status"):
+        for endpoint in ("/workout/session", "/video_status", "/video_feed"):
             with self.subTest(endpoint=endpoint):
                 response = assigned.get(endpoint)
                 self.assertEqual(response.status_code, 403)
@@ -656,7 +656,7 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(transferred.status_code, 302)
 
-        for endpoint in ("/workout/session", "/video_status"):
+        for endpoint in ("/workout/session", "/video_status", "/video_feed"):
             with self.subTest(endpoint=endpoint):
                 response = first_clinician.get(endpoint)
                 self.assertEqual(response.status_code, 403)
