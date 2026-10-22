@@ -270,4 +270,50 @@ if (exerciseButtons.length > 0) {
         });
     });
 
+
+
+    document.querySelectorAll(".workout-plan-review-button").forEach(button => {
+        button.addEventListener("click", async () => {
+            const plan = button.closest(".workout-saved-plan");
+            const rationaleInput = plan?.querySelector(".workout-plan-review-rationale");
+            const message = document.getElementById("workout-start-message");
+            if (!plan || !rationaleInput || !message) return;
+
+            const rationale = rationaleInput.value.trim();
+            if (!rationale) {
+                rationaleInput.reportValidity();
+                message.textContent = "A review rationale is required.";
+                return;
+            }
+
+            const decision = button.dataset.decision;
+            button.disabled = true;
+            message.textContent = "Recording clinician review…";
+            try {
+                const response = await fetch(
+                    `/workout/plans/${encodeURIComponent(plan.dataset.planId)}/review`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRF-Token": document.querySelector(
+                                'meta[name="csrf-token"]',
+                            )?.content || "",
+                        },
+                        body: JSON.stringify({ decision, rationale }),
+                    },
+                );
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `Plan review failed (${response.status})`);
+                }
+                message.textContent = `Plan review recorded: ${result.approval_status}.`;
+                window.location.reload();
+            } catch (error) {
+                message.textContent = error.message;
+                button.disabled = false;
+            }
+        });
+    });
+
 }
