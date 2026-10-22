@@ -28,9 +28,9 @@ The follow-up migration allows these historical fields to be nullable in databas
 
 ### Clinician-to-patient authorization scope
 
-The current prototype grants clinicians broad access to patient records. Clinician assignment, clinic membership, organization/tenant boundaries, and a policy for who may access each patient have not been implemented. This is an intentional scope gap in the architecture, not something a passing unit-test suite resolves.
+The review branch now includes a clinician-to-patient assignment workflow, persistence/migration support, and automated tests. This supersedes earlier phase notes that described assignments as entirely unimplemented. The existence of an assignment model and workflow does not, by itself, prove that every patient-specific route, API, export, history query, and mutation enforces the intended relationship.
 
-Before real patient data or multi-clinician deployment, define the intended access policy, persist clinician-patient assignments (or an explicitly approved alternative), enforce that policy at every patient-specific route and API, and add cross-clinician isolation tests. Do not assume the role `CLINICIAN` by itself establishes a treatment relationship.
+The remaining release gate is an authorization-coverage audit: define the approved access policy (including shared patients, reassignment, unassigned patients, administrator access, and any clinic/tenant boundaries), trace every patient-specific read and write through the enforcement layer, and add cross-clinician isolation tests for each applicable route/API. Confirm that patient lists and indirect access paths follow the same policy. Do not assume the role `CLINICIAN` by itself establishes a treatment relationship, and do not claim multi-clinician production readiness until policy and route coverage are verified.
 
 ### Physical Jetson/camera acceptance test
 
@@ -75,8 +75,9 @@ The review branch is intentionally separate from `main`. Compare the latest bran
 
 ## Next recommended sequence
 
-1. Confirm the session-revocation change passes the latest branch CI run.
-2. Decide and implement clinician-to-patient access scope before expanding beyond a single trusted prototype environment.
-3. Run physical Jetson/camera acceptance tests and preserve the measurements.
-4. Conduct the annotated-recording movement validation.
-5. Update historical phase documents only where their current-status statements are materially misleading; preserve their record of each phase's original boundary.
+1. Confirm the latest branch CI result for the session-revocation and workout-persistence changes; do not substitute results from an earlier commit.
+2. Audit clinician-to-patient authorization policy and enforcement across every patient-specific route/API, including cross-clinician isolation and patient-list visibility.
+3. Review workout persistence for loss of repetition-level measurements; decide whether a structured repetition record is required before changing the schema, and preserve the distinction between zero and unavailable values.
+4. Run physical Jetson/camera acceptance tests and preserve the measurements.
+5. Conduct the annotated-recording movement validation.
+6. Update historical phase documents only where their current-status statements are materially misleading; preserve their record of each phase's original boundary.
