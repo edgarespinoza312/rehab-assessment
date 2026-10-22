@@ -61,6 +61,10 @@ jobs:
               "workout_exercise_results",
               "progression_review_events",
               "patient_assignments",
+              "workout_plan_review_events",
+              "safety_incidents",
+              "safety_incident_events",
+              "safety_corrective_actions",
           }
 
           with app.app_context():
