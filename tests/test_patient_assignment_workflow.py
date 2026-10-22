@@ -289,6 +289,69 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         self.assertEqual(allowed_delete.status_code, 302)
         self.assertIsNone(db.session.get(AssessmentRecord, assessment_id))
 
+
+    def test_workout_plan_builder_and_creation_are_assignment_scoped(self):
+        from dashboard.models import WorkoutPlan
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        assigned = app.test_client()
+        self.login(assigned, "clinician1@workflow.test")
+        unassigned = app.test_client()
+        self.login(unassigned, "clinician2@workflow.test")
+
+        self.assertEqual(
+            assigned.get(
+                f"/workout/builder?patient_id={self.patient_id}"
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            unassigned.get(
+                f"/workout/builder?patient_id={self.patient_id}"
+            ).status_code,
+            403,
+        )
+
+        payload = {
+            "name": "Unauthorized plan attempt",
+            "description": "Must not be saved",
+            "patient_id": self.patient_id,
+            "exercises": [],
+        }
+        denied = unassigned.post(
+            "/workout/plans",
+            json=payload,
+            headers={"X-CSRF-Token": self.csrf(unassigned)},
+        )
+        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(
+            WorkoutPlan.query.filter_by(patient_id=self.patient_id).count(),
+            0,
+        )
+
+        assigned_response = assigned.post(
+            "/workout/plans",
+            json=payload,
+            headers={"X-CSRF-Token": self.csrf(assigned)},
+        )
+        self.assertEqual(assigned_response.status_code, 400)
+        self.assertEqual(
+            WorkoutPlan.query.filter_by(patient_id=self.patient_id).count(),
+            0,
+        )
+
     def test_admin_revocation_removes_access_but_keeps_audit_record(self):
         admin = app.test_client()
         self.login(admin, "admin@workflow.test")
