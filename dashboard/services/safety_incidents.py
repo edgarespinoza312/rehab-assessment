@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import json
-import math
 import uuid
 
 from dashboard.database import db
@@ -97,11 +96,11 @@ def _risk_score(
     exposure_count: int,
     control_failure: bool,
 ) -> tuple[float, str]:
-    if severity not in SEVERITY_VALUES:
+    if not isinstance(severity, str) or severity not in SEVERITY_VALUES:
         raise SafetyWorkflowError("severity must be low, moderate, serious, or critical")
-    if likelihood not in LIKELIHOOD_VALUES:
+    if not isinstance(likelihood, str) or likelihood not in LIKELIHOOD_VALUES:
         raise SafetyWorkflowError("likelihood must be unlikely, possible, likely, or very_likely")
-    if evidence_strength not in EVIDENCE_VALUES:
+    if not isinstance(evidence_strength, str) or evidence_strength not in EVIDENCE_VALUES:
         raise SafetyWorkflowError("evidence_strength must be weak, moderate, or strong")
     if isinstance(exposure_count, bool) or not isinstance(exposure_count, int) or exposure_count < 1:
         raise SafetyWorkflowError("exposure_count must be a positive integer")
@@ -352,7 +351,7 @@ def triage_safety_incident(
         incident.owner_user_id = owner.user_id
 
     if root_cause_status is not None:
-        if root_cause_status not in {"not_assessed", "known", "unknown"}:
+        if not isinstance(root_cause_status, str) or root_cause_status not in {"not_assessed", "known", "unknown"}:
             raise SafetyWorkflowError("root_cause_status must be not_assessed, known, or unknown")
         notes = (root_cause_notes or "").strip()
         if root_cause_status in {"known", "unknown"} and len(notes) < 8:
@@ -421,6 +420,9 @@ def create_corrective_action(
         raise SafetyWorkflowError("corrective-action owner must have safety-lead authorization")
     if not isinstance(due_at, datetime):
         raise SafetyWorkflowError("due_at must be a datetime")
+    if due_at.tzinfo is not None:
+        from datetime import timezone
+        due_at = due_at.astimezone(timezone.utc).replace(tzinfo=None)
     if due_at <= datetime.utcnow():
         raise SafetyWorkflowError("due_at must be in the future")
     try:
@@ -560,7 +562,7 @@ def close_safety_incident(
         raise SafetyWorkflowError("a separate independent review must be recorded before closure")
     if closer.user_id in {incident.reporter_user_id, incident.owner_user_id}:
         raise SafetyWorkflowError("reporter or investigation owner cannot close the incident")
-    if root_cause_status not in {"known", "unknown"}:
+    if not isinstance(root_cause_status, str) or root_cause_status not in {"known", "unknown"}:
         raise SafetyWorkflowError("closure requires root_cause_status known or unknown")
     root_notes = _validate_text(root_cause_notes, "root-cause rationale", 8, _MAX_DETAILS)
     closure_rationale = _validate_text(rationale, "closure rationale", 8, _MAX_RATIONALE)
@@ -620,7 +622,7 @@ def reopen_safety_incident(
         "new_evidence", "recurrence", "ineffective_corrective_action",
         "changed_exposure", "credible_critical_risk", "cross_case_signal",
     }
-    if trigger not in allowed_triggers:
+    if not isinstance(trigger, str) or trigger not in allowed_triggers:
         raise SafetyWorkflowError("unsupported incident-reopen trigger")
     details = _validate_text(details, "reopen rationale", 8, _MAX_DETAILS)
     _guard_chain(incident)
