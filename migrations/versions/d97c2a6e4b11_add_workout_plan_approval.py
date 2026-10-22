@@ -46,6 +46,20 @@ def upgrade():
             "ck_workout_plan_approval_status",
             "approval_status IN ('draft', 'approved', 'rejected', 'suspended')",
         )
+        batch.create_foreign_key(
+            "fk_workout_plans_created_by_user_id_users",
+            "users",
+            ["created_by_user_id"],
+            ["user_id"],
+            ondelete="SET NULL",
+        )
+        batch.create_foreign_key(
+            "fk_workout_plans_approved_by_user_id_users",
+            "users",
+            ["approved_by_user_id"],
+            ["user_id"],
+            ondelete="SET NULL",
+        )
 
     op.create_index(
         "ix_workout_plans_created_by_user_id",
@@ -108,6 +122,8 @@ def downgrade():
     op.drop_table("workout_plan_review_events")
     op.drop_index("ix_workout_plans_created_by_user_id", table_name="workout_plans")
     with op.batch_alter_table("workout_plans") as batch:
+        batch.drop_constraint("fk_workout_plans_approved_by_user_id_users", type_="foreignkey")
+        batch.drop_constraint("fk_workout_plans_created_by_user_id_users", type_="foreignkey")
         batch.drop_constraint("ck_workout_plan_approval_status", type_="check")
         batch.drop_column("approval_note")
         batch.drop_column("approved_at")
