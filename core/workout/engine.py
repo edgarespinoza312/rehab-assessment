@@ -2,6 +2,8 @@
 
 from dataclasses import replace
 from datetime import datetime, timezone
+import math
+from numbers import Real
 from typing import Callable
 from uuid import uuid4
 
@@ -17,6 +19,31 @@ from .models import (
     WorkoutSession,
 )
 from .registry import BUILTIN_EXERCISES
+
+
+def _assessment_result_is_valid(result: AssessmentResult) -> bool:
+    """Reject corrupt score payloads before they enter a workout history."""
+    score_fields = (
+        "overall_score", "rom_score", "tempo_score", "completion_score",
+        "stability_score", "compensation_score", "symmetry_score",
+    )
+    for field_name in score_fields:
+        value = getattr(result, field_name, None)
+        if (
+            not isinstance(value, Real)
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or not 0.0 <= float(value) <= 100.0
+        ):
+            return False
+    feedback = getattr(result, "feedback", None)
+    if not isinstance(feedback, (list, tuple)):
+        return False
+    if any(not isinstance(item, str) or len(item) > 1000 for item in feedback):
+        return False
+    if len(feedback) > 50:
+        return False
+    return True
 
 
 class InvalidSessionTransition(RuntimeError):
@@ -100,7 +127,12 @@ class SessionEngine:
         result: AssessmentResult | None,
     ) -> bool:
         """Record an authoritative completed-repetition event and its score."""
-        if exercise_state is None or not exercise_state.rep_completed or result is None:
+        if (
+            exercise_state is None
+            or not exercise_state.rep_completed
+            or not isinstance(result, AssessmentResult)
+            or not _assessment_result_is_valid(result)
+        ):
             return False
         session = self._require_status(SessionStatus.EXERCISING)
         prescription = self.current_prescription
