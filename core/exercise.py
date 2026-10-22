@@ -78,6 +78,18 @@ class ExerciseEngine:
                     metrics, start_threshold=90.0, end_threshold=150.0,
                 )
 
+            case ExerciseType.LEFT_KNEE_EXTENSION:
+                self._analyze_reverse_angle(
+                    ExerciseType.LEFT_KNEE_EXTENSION, metrics.knee_angle_left,
+                    metrics, start_threshold=110.0, end_threshold=150.0,
+                )
+
+            case ExerciseType.RIGHT_KNEE_EXTENSION:
+                self._analyze_reverse_angle(
+                    ExerciseType.RIGHT_KNEE_EXTENSION, metrics.knee_angle_right,
+                    metrics, start_threshold=110.0, end_threshold=150.0,
+                )
+
             case ExerciseType.LEFT_SHOULDER_ABDUCTION:
                 self._analyze_reverse_angle(
                     ExerciseType.LEFT_SHOULDER_ABDUCTION, metrics.shoulder_angle_left,
