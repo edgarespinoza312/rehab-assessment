@@ -609,5 +609,73 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         self.assertEqual(cancel.status_code, 403)
 
 
+    def test_active_workout_access_is_revoked_after_assignment_transfer(self):
+        from core.workout import WorkoutPrescription
+        from dashboard.services.workout_persistence import create_workout_plan
+
+        plan = create_workout_plan(
+            "Assignment transfer runtime plan",
+            (WorkoutPrescription("bicep_curl", "left", 4),),
+            patient_id=self.patient_id,
+        )
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        first_clinician = app.test_client()
+        self.login(first_clinician, "clinician1@workflow.test")
+        second_clinician = app.test_client()
+        self.login(second_clinician, "clinician2@workflow.test")
+
+        assigned_first = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(assigned_first.status_code, 302)
+
+        started = first_clinician.post(
+            "/workout/start",
+            json={"plan_id": plan.plan_id, "patient_id": self.patient_id},
+            headers={"X-CSRF-Token": self.csrf(first_clinician)},
+        )
+        self.assertEqual(started.status_code, 201)
+
+        transferred = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_two_id),
+                "reason": "Coverage transfer during workout",
+                "filter": "all",
+            },
+        )
+        self.assertEqual(transferred.status_code, 302)
+
+        for endpoint in ("/workout/session", "/video_status"):
+            with self.subTest(endpoint=endpoint):
+                response = first_clinician.get(endpoint)
+                self.assertEqual(response.status_code, 403)
+
+        cancel = first_clinician.post(
+            "/workout/cancel",
+            json={},
+            headers={"X-CSRF-Token": self.csrf(first_clinician)},
+        )
+        self.assertEqual(cancel.status_code, 403)
+
+        # The newly assigned clinician can start a separate authorized session.
+        second_started = second_clinician.post(
+            "/workout/start",
+            json={"plan_id": plan.plan_id, "patient_id": self.patient_id},
+            headers={"X-CSRF-Token": self.csrf(second_clinician)},
+        )
+        self.assertEqual(second_started.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()
