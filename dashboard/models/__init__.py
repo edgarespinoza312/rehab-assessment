@@ -11,3 +11,4 @@ from .workout import (
 from .review import ProgressionReviewEvent
 from .identity import Role, User, UserRole
 from .patient_assignment import PatientAssignment
+from .safety import SafetyIncident, SafetyIncidentEvent, SafetyCorrectiveAction
