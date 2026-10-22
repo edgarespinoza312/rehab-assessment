@@ -16,11 +16,16 @@ from dashboard.models import (
     WorkoutExerciseResult,
     WorkoutPlan,
     WorkoutPlanExercise,
+    WorkoutPlanReviewEvent,
+    Role,
+    User,
 )
 from dashboard.services.workout_persistence import (
     create_workout_plan,
     load_workout_preset,
     persist_workout_session,
+    review_workout_plan,
+    verify_workout_plan_review_chain,
 )
 
 
@@ -484,3 +489,116 @@ class WorkoutPersistenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class WorkoutPlanApprovalGovernanceTests(unittest.TestCase):
+    def setUp(self):
+        self.app = Flask(f"workout-approval-{id(self)}")
+        self.app.config.update(
+            SQLALCHEMY_DATABASE_URI="sqlite://",
+            SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        )
+        db.init_app(self.app)
+        self.context = self.app.app_context()
+        self.context.push()
+        db.create_all()
+
+        self.patient = Patient(first_name="Jordan", last_name="Approval")
+        clinician_role = Role(name="CLINICIAN")
+        self.author = User(
+            display_name="Plan Author",
+            email=f"author-{id(self)}@example.test",
+            status="ACTIVE",
+        )
+        self.reviewer = User(
+            display_name="Independent Reviewer",
+            email=f"reviewer-{id(self)}@example.test",
+            status="ACTIVE",
+        )
+        self.author.roles.append(clinician_role)
+        self.reviewer.roles.append(clinician_role)
+        db.session.add_all([self.patient, self.author, self.reviewer, clinician_role])
+        db.session.commit()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+        self.context.pop()
+
+    def _new_plan(self, exercise_id="bicep_curl"):
+        return create_workout_plan(
+            "Governed plan",
+            (WorkoutPrescription(exercise_id, "left", 3),),
+            patient_id=self.patient.patient_id,
+            created_by_user_id=self.author.user_id,
+        )
+
+    def test_plan_starts_as_draft_and_author_cannot_approve_itself(self):
+        plan = self._new_plan()
+        self.assertEqual(plan.approval_status, "draft")
+        with self.assertRaisesRegex(ValueError, "cannot approve their own"):
+            review_workout_plan(
+                plan.plan_id, self.author.user_id, "approve", "I reviewed my own plan"
+            )
+        self.assertEqual(plan.approval_status, "draft")
+        self.assertEqual(WorkoutPlanReviewEvent.query.count(), 0)
+
+    def test_independent_approval_is_hash_linked_and_required_for_activation(self):
+        plan = self._new_plan()
+        with self.assertRaisesRegex(ValueError, "not clinician-approved"):
+            load_workout_preset(plan.plan_id, require_approved=True)
+
+        reviewed, event = review_workout_plan(
+            plan.plan_id,
+            self.reviewer.user_id,
+            "approve",
+            "Reviewed exercise sequence and bounded targets.",
+        )
+        self.assertEqual(reviewed.approval_status, "approved")
+        self.assertEqual(reviewed.approved_by_user_id, self.reviewer.user_id)
+        self.assertIsNotNone(reviewed.approved_at)
+        self.assertEqual(event.new_status, "approved")
+        self.assertTrue(verify_workout_plan_review_chain(plan.plan_id))
+        loaded = load_workout_preset(plan.plan_id, require_approved=True)
+        self.assertEqual(loaded.exercises[0].exercise_id, "bicep_curl")
+
+    def test_tampered_review_event_blocks_activation(self):
+        plan = self._new_plan()
+        review_workout_plan(
+            plan.plan_id, self.reviewer.user_id, "approve", "Independent review."
+        )
+        event = WorkoutPlanReviewEvent.query.filter_by(plan_id=plan.plan_id).one()
+        event.rationale = "silently changed"
+        db.session.commit()
+
+        self.assertFalse(verify_workout_plan_review_chain(plan.plan_id))
+        with self.assertRaisesRegex(ValueError, "review history integrity"):
+            load_workout_preset(plan.plan_id, require_approved=True)
+
+    def test_engineering_only_exercises_are_gated_even_after_plan_approval(self):
+        plan = self._new_plan("shoulder_abduction")
+        review_workout_plan(
+            plan.plan_id, self.reviewer.user_id, "approve", "Approval for evaluation."
+        )
+        with self.assertRaisesRegex(ValueError, "not enabled for clinical sessions"):
+            load_workout_preset(plan.plan_id, require_approved=True)
+        evaluation_preset = load_workout_preset(
+            plan.plan_id,
+            require_approved=True,
+            allow_engineering_only=True,
+        )
+        self.assertEqual(evaluation_preset.exercises[0].exercise_id, "shoulder_abduction")
+
+    def test_rejection_is_recorded_and_cannot_be_started(self):
+        plan = self._new_plan()
+        reviewed, event = review_workout_plan(
+            plan.plan_id,
+            self.reviewer.user_id,
+            "reject",
+            "The exercise targets need revision before review can pass.",
+        )
+        self.assertEqual(reviewed.approval_status, "rejected")
+        self.assertTrue(verify_workout_plan_review_chain(plan.plan_id))
+        with self.assertRaisesRegex(ValueError, "not clinician-approved"):
+            load_workout_preset(plan.plan_id, require_approved=True)
