@@ -230,6 +230,65 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
             1,
         )
 
+
+    def test_assessment_report_and_deletion_are_assignment_scoped(self):
+        from dashboard.models import AssessmentRecord
+
+        assessment = AssessmentRecord(
+            patient_id=self.patient_id,
+            exercise="Shoulder flexion",
+            repetitions=5,
+            average_score=82.0,
+            best_score=90.0,
+            worst_score=70.0,
+            trend="stable",
+            feedback="[]",
+        )
+        db.session.add(assessment)
+        db.session.commit()
+        assessment_id = assessment.assessment_id
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        assigned = app.test_client()
+        self.login(assigned, "clinician1@workflow.test")
+        unassigned = app.test_client()
+        self.login(unassigned, "clinician2@workflow.test")
+
+        self.assertEqual(
+            assigned.get(f"/assessment/{assessment_id}").status_code,
+            200,
+        )
+        self.assertEqual(
+            unassigned.get(f"/assessment/{assessment_id}").status_code,
+            404,
+        )
+
+        denied_delete = unassigned.post(
+            f"/assessment/{assessment_id}/delete",
+            data={"csrf_token": self.csrf(unassigned)},
+        )
+        self.assertEqual(denied_delete.status_code, 403)
+        self.assertIsNotNone(db.session.get(AssessmentRecord, assessment_id))
+
+        allowed_delete = assigned.post(
+            f"/assessment/{assessment_id}/delete",
+            data={"csrf_token": self.csrf(assigned)},
+        )
+        self.assertEqual(allowed_delete.status_code, 302)
+        self.assertIsNone(db.session.get(AssessmentRecord, assessment_id))
+
     def test_admin_revocation_removes_access_but_keeps_audit_record(self):
         admin = app.test_client()
         self.login(admin, "admin@workflow.test")
