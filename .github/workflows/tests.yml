@@ -65,6 +65,7 @@ jobs:
               "safety_incidents",
               "safety_incident_events",
               "safety_corrective_actions",
+              "safety_incident_links",
           }
 
           with app.app_context():
