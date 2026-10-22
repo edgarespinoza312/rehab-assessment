@@ -108,9 +108,9 @@ def validate_landmarks(
                 "insufficient_landmarks",
             )
         x, y, confidence = (float(value) for value in point)
-        if name in IDENTITY_JOINTS and (
-            not 0.0 <= x < width or not 0.0 <= y < height
-        ):
+        # Every canonical landmark can feed a metric or overlay. Allowing
+        # out-of-frame hips/knees through is unsafe for the new joint references.
+        if not 0.0 <= x < width or not 0.0 <= y < height:
             return _reject(
                 f"landmark_out_of_bounds:{name}", "anatomical_implausibility"
             )
