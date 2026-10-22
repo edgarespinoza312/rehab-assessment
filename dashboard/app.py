@@ -1148,6 +1148,26 @@ def assessment_correction_collection(assessment_id):
     return jsonify(correction_to_dict(correction, include_events=True)), 201
 
 
+@app.route("/api/assessment-corrections/<int:correction_id>", methods=["GET"])
+@require_auth
+def assessment_correction_detail_route(correction_id):
+    identity = current_identity()
+    correction = db.session.get(AssessmentCorrection, correction_id)
+    if correction is None:
+        return jsonify({"error": "correction not found"}), 404
+    if not (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, correction.patient_id, "assessment_correction"
+        )
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    from dashboard.services.assessment_corrections import correction_to_dict
+    return jsonify(correction_to_dict(correction, include_events=True)), 200
+
+
 @app.route("/api/assessment-corrections/<int:correction_id>/review", methods=["POST"])
 @require_auth
 def assessment_correction_review_route(correction_id):
