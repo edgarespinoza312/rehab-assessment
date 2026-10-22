@@ -516,5 +516,41 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         self.assertEqual(WorkoutPlan.query.filter_by(patient_id=self.patient_id).count(), 1)
 
 
+    def test_patient_specific_workout_plan_listing_is_assignment_scoped(self):
+        from core.workout import WorkoutPrescription
+        from dashboard.services.workout_persistence import create_workout_plan
+
+        create_workout_plan(
+            "Confidential patient plan",
+            (WorkoutPrescription("bicep_curl", "left", 4),),
+            patient_id=self.patient_id,
+        )
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        assigned = app.test_client()
+        self.login(assigned, "clinician1@workflow.test")
+        response = assigned.get(f"/selection?patient_id={self.patient_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Confidential patient plan", response.get_data(as_text=True))
+
+        unassigned = app.test_client()
+        self.login(unassigned, "clinician2@workflow.test")
+        response = unassigned.get(f"/selection?patient_id={self.patient_id}")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("Confidential patient plan", response.get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()
