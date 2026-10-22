@@ -20,6 +20,7 @@ from core.perception.base import (
     is_rejected_result,
 )
 from core.perception.identity import IdentityState
+from core.perception.readiness import ExerciseReadiness
 from core.performance import PerformanceMonitor
 from core.perception.quality import validate_landmarks
 from core.perception.yolo_tensorrt_backend import (
@@ -1124,3 +1125,49 @@ class AdversarialQualityGateTests(unittest.TestCase):
         decision = validate_landmarks(points, 0.9, 640, 480)
         self.assertFalse(decision.accepted)
         self.assertIn("missing_identity_joints:left_wrist", decision.reasons)
+
+
+class FrameMetadataIntegrityTests(unittest.TestCase):
+    def test_nan_timestamp_is_rejected_before_pose_processing(self):
+        readiness = ExerciseReadiness()
+        result = readiness.evaluate(
+            None,
+            backend="test",
+            timestamp=float("nan"),
+            frame_number=1,
+            width=640,
+            height=480,
+            exercise_side="left",
+        )
+        self.assertEqual(result.status, PoseStatus.INVALID)
+        self.assertFalse(result.pose_valid)
+        self.assertIn("invalid_frame_timestamp", result.quality["reasons"])
+        self.assertEqual(result.timestamp, 0.0)
+
+    def test_negative_or_non_integer_frame_number_is_rejected(self):
+        for frame_number in (-1, 1.5, True):
+            with self.subTest(frame_number=frame_number):
+                result = ExerciseReadiness().evaluate(
+                    None,
+                    backend="test",
+                    timestamp=1.0,
+                    frame_number=frame_number,
+                    width=640,
+                    height=480,
+                    exercise_side="left",
+                )
+                self.assertEqual(result.status, PoseStatus.INVALID)
+                self.assertIn("invalid_frame_number", result.quality["reasons"])
+
+    def test_invalid_dimensions_are_rejected_before_no_person_fallback(self):
+        result = ExerciseReadiness().evaluate(
+            None,
+            backend="test",
+            timestamp=1.0,
+            frame_number=1,
+            width=640,
+            height=0,
+            exercise_side="left",
+        )
+        self.assertEqual(result.status, PoseStatus.INVALID)
+        self.assertIn("invalid_image_dimensions", result.quality["reasons"])
