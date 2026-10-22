@@ -560,7 +560,11 @@ class WorkoutPlanApprovalGovernanceTests(unittest.TestCase):
         self.assertIsNotNone(reviewed.approved_at)
         self.assertEqual(event.new_status, "approved")
         self.assertTrue(verify_workout_plan_review_chain(plan.plan_id))
-        loaded = load_workout_preset(plan.plan_id, require_approved=True)
+        loaded = load_workout_preset(
+            plan.plan_id,
+            require_approved=True,
+            allow_non_clinically_validated=True,
+        )
         self.assertEqual(loaded.exercises[0].exercise_id, "bicep_curl")
 
     def test_tampered_review_event_blocks_activation(self):
@@ -587,6 +591,7 @@ class WorkoutPlanApprovalGovernanceTests(unittest.TestCase):
             plan.plan_id,
             require_approved=True,
             allow_engineering_only=True,
+            allow_non_clinically_validated=True,
         )
         self.assertEqual(evaluation_preset.exercises[0].exercise_id, "shoulder_abduction")
 
