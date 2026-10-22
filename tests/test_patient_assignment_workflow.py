@@ -422,5 +422,64 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
         self.assertEqual(history.ended_by_user_id, self.admin_id)
 
 
+    def test_assessment_notes_mutation_requires_active_assignment(self):
+        from dashboard.models import AssessmentRecord
+
+        assessment = AssessmentRecord(
+            patient_id=self.patient_id,
+            exercise="Shoulder flexion",
+            repetitions=5,
+            average_score=82.0,
+            best_score=90.0,
+            worst_score=70.0,
+            trend="stable",
+            feedback="[]",
+            notes="Original clinical note",
+        )
+        db.session.add(assessment)
+        db.session.commit()
+        assessment_id = assessment.assessment_id
+
+        admin = app.test_client()
+        self.login(admin, "admin@workflow.test")
+        response = admin.post(
+            f"/patients/{self.patient_id}/assignment",
+            data={
+                "csrf_token": self.csrf(admin),
+                "action": "assign",
+                "clinician_user_id": str(self.clinician_one_id),
+                "filter": "all",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        assigned = app.test_client()
+        self.login(assigned, "clinician1@workflow.test")
+        unassigned = app.test_client()
+        self.login(unassigned, "clinician2@workflow.test")
+
+        denied = unassigned.post(
+            f"/assessment/{assessment_id}/notes",
+            data={
+                "csrf_token": self.csrf(unassigned),
+                "notes": "Attempted change by unassigned clinician",
+            },
+        )
+        self.assertEqual(denied.status_code, 404)
+        db.session.refresh(assessment)
+        self.assertEqual(assessment.notes, "Original clinical note")
+
+        allowed = assigned.post(
+            f"/assessment/{assessment_id}/notes",
+            data={
+                "csrf_token": self.csrf(assigned),
+                "notes": "Authorized update",
+            },
+        )
+        self.assertEqual(allowed.status_code, 302)
+        db.session.refresh(assessment)
+        self.assertEqual(assessment.notes, "Authorized update")
+
+
 if __name__ == "__main__":
     unittest.main()
