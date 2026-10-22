@@ -841,6 +841,38 @@ def safety_incident_to_dict(incident: SafetyIncident, *, include_events: bool = 
             for action in incident.corrective_actions
         ],
     }
+    outgoing = list(incident.outgoing_links)
+    incoming = list(incident.incoming_links)
+    value["linked_cases"] = [
+        {
+            "incident_id": link.related_incident.incident_id,
+            "incident_key": link.related_incident.incident_key,
+            "link_type": link.link_type,
+            "rationale": link.rationale,
+            "created_at": link.created_at.isoformat(),
+        }
+        for link in outgoing
+    ] + [
+        {
+            "incident_id": link.incident.incident_id,
+            "incident_key": link.incident.incident_key,
+            "link_type": link.link_type,
+            "rationale": link.rationale,
+            "created_at": link.created_at.isoformat(),
+        }
+        for link in incoming
+    ]
+    value["aggregate_linked_priority_tier"] = max(
+        [incident.priority_tier]
+        + [item["priority_tier"] for item in [
+            {
+                "priority_tier": link.related_incident.priority_tier
+            } for link in outgoing
+        ] + [
+            {"priority_tier": link.incident.priority_tier} for link in incoming
+        ]],
+        key=lambda tier: {"routine": 0, "elevated": 1, "urgent": 2, "critical": 3}.get(tier, 3),
+    )
     if include_events:
         value["event_chain_valid"] = verify_safety_event_chain(incident.incident_id)
         value["events"] = [
