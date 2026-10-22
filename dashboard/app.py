@@ -140,6 +140,7 @@ from dashboard.services.safety_incidents import (
     safety_incident_to_dict,
     triage_safety_incident,
     update_corrective_action,
+    link_safety_incidents,
 )
 from dashboard.services.progression import (
     get_patient_progression,
@@ -3639,6 +3640,41 @@ def safety_incident_reopen(incident_id):
     except SafetyWorkflowError as error:
         return _safety_error_response(error, 409)
     return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/links", methods=["POST"])
+@require_auth
+def safety_incident_link_route(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        related_id = payload.get("related_incident_id")
+        if isinstance(related_id, bool) or not isinstance(related_id, int):
+            raise SafetyWorkflowError("related_incident_id must be an integer")
+        link = link_safety_incidents(
+            incident_id,
+            related_id,
+            identity.user_id,
+            link_type=payload.get("link_type"),
+            rationale=payload.get("rationale"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify({
+        "link_id": link.link_id,
+        "incident_id": link.incident_id,
+        "related_incident_id": link.related_incident_id,
+        "link_type": link.link_type,
+        "rationale": link.rationale,
+        "created_at": link.created_at.isoformat(),
+    }), 201
 
 
 @app.route("/api/safety/restrictions/<scope>", methods=["GET"])
