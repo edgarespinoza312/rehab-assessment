@@ -88,7 +88,7 @@ class SafetyIncidentRouteTests(unittest.TestCase):
 
         workout_start = self.client.post(
             "/workout/start",
-            json={"preset_id": "starter_bicep_curl", "patient_id": 71},
+            json={"preset_id": "bilateral_bicep_curl_2", "patient_id": 71},
             headers={"X-CSRF-Token": self.csrf_token},
         )
         self.assertEqual(workout_start.status_code, 423)
