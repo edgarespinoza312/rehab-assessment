@@ -19,7 +19,7 @@ from dashboard.database import db, migrate
 
 # Import models so SQLA
 # lchemy knows they exist
-from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan, SafetyIncident, SafetyCorrectiveAction, AssessmentCorrection
+from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan, SafetyIncident, SafetyCorrectiveAction, AssessmentCorrection, PatientReviewDelegation
 from dashboard.services.authentication import (
     current_identity,
     csrf_token,
@@ -126,6 +126,13 @@ from dashboard.services.workout_persistence import (
     load_workout_preset,
     persist_workout_session,
     review_workout_plan,
+)
+from dashboard.services.patient_review_delegations import (
+    ReviewDelegationError,
+    create_review_delegation,
+    delegation_to_dict,
+    has_active_review_delegation,
+    revoke_review_delegation,
 )
 from dashboard.services.assessment_corrections import (
     CorrectionWorkflowError,
@@ -1036,6 +1043,64 @@ def update_assessment_notes(assessment_id):
         )
     )
 
+@app.route("/api/patients/<int:patient_id>/review-delegations", methods=["GET", "POST"])
+@require_auth
+def patient_review_delegation_collection(patient_id):
+    identity = current_identity()
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    if request.method == "GET":
+        grants = PatientReviewDelegation.query.filter_by(
+            patient_id=patient_id,
+            delegated_by_user_id=identity.user_id,
+        ).order_by(PatientReviewDelegation.created_at.desc()).all()
+        return jsonify({"delegations": [delegation_to_dict(item) for item in grants]})
+
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    reviewer_id = payload.get("reviewer_user_id")
+    if isinstance(reviewer_id, bool) or not isinstance(reviewer_id, int):
+        return jsonify({"error": "reviewer_user_id must be an integer"}), 400
+    try:
+        grant = create_review_delegation(
+            patient_id,
+            identity.user_id,
+            reviewer_id,
+            scope=payload.get("scope"),
+            reason=payload.get("reason"),
+        )
+    except ReviewDelegationError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(delegation_to_dict(grant)), 201
+
+
+@app.route("/api/patient-review-delegations/<int:delegation_id>/revoke", methods=["POST"])
+@require_auth
+def revoke_patient_review_delegation_route(delegation_id):
+    identity = current_identity()
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        grant = revoke_review_delegation(
+            delegation_id,
+            identity.user_id,
+            reason=payload.get("reason"),
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except ReviewDelegationError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(delegation_to_dict(grant)), 200
+
+
 @app.route("/api/assessments/<int:assessment_id>/corrections", methods=["GET", "POST"])
 @require_auth
 def assessment_correction_collection(assessment_id):
@@ -1090,8 +1155,13 @@ def assessment_correction_review_route(correction_id):
     correction = db.session.get(AssessmentCorrection, correction_id)
     if correction is None:
         return jsonify({"error": "correction not found"}), 404
-    if not authorize_patient_access(
-        identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+    if not (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, correction.patient_id, "assessment_correction"
+        )
     ):
         return jsonify({"error": "forbidden"}), 403
     if not any(role.value == "CLINICIAN" for role in identity.roles):
@@ -1481,8 +1551,13 @@ def review_workout_plan_route(plan_id: int):
     plan = db.session.get(WorkoutPlan, plan_id)
     if plan is None:
         return jsonify({"error": f"workout plan {plan_id} does not exist"}), 404
-    if plan.patient_id is not None and not authorize_patient_access(
-        identity, Capability.VIEW_ASSIGNED_PATIENT, plan.patient_id
+    if plan.patient_id is not None and not (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, plan.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, plan.patient_id, "plan_approval"
+        )
     ):
         return jsonify({"error": "forbidden"}), 403
     payload = request.get_json(silent=True)
