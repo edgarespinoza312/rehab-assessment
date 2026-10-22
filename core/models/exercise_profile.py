@@ -66,3 +66,6 @@ class ExerciseProfile:
     minimum_rep_time: float = 0.0
 
     maximum_rep_time: float = 0.0
+
+    # Engineering maturity is not the same as clinical validation.
+    validation_status: str = "not_clinically_validated"
