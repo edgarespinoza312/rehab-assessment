@@ -2493,13 +2493,6 @@ def start_workout():
         preset = BUILTIN_PRESETS.get(preset_id.strip())
         if preset is None:
             return jsonify({"error": f"unknown workout preset: {preset_id}"}), 404
-        if not app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False):
-            for prescription in preset.exercises:
-                definition = BUILTIN_EXERCISES.get(prescription.exercise_id)
-                profile = definition.profile_for_side(prescription.side)
-                validation_error = _exercise_validation_error(profile)
-                if validation_error:
-                    return jsonify({"error": validation_error}), 409
     patient_id = payload.get("patient_id")
     if patient_id is None:
         return jsonify({"error": "patient_id is required"}), 400
@@ -2533,6 +2526,16 @@ def start_workout():
             "restriction_scope": error.scope,
             "incident_keys": [item.incident_key for item in error.incidents],
         }), 423
+    if selected_plan_id is None and not app.config.get(
+        "REVALIV_ENABLE_UNVALIDATED_EXERCISES", False
+    ):
+        for prescription in preset.exercises:
+            definition = BUILTIN_EXERCISES.get(prescription.exercise_id)
+            profile = definition.profile_for_side(prescription.side)
+            validation_error = _exercise_validation_error(profile)
+            if validation_error:
+                return jsonify({"error": validation_error}), 409
+
     if selected_plan_id is not None:
         try:
             preset = load_workout_preset(
