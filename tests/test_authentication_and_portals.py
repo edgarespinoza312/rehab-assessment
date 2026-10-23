@@ -721,6 +721,7 @@ class AuthenticationAndPortalTests(unittest.TestCase):
             "/api/patients/1/progression/advisory",
             "/api/patients/1/progression/advisory/reviews?exercise_id=bicep_curl&side=left",
             "/api/assessments/101/corrections",
+            "/api/assessments/101/effective-values",
         ]
         for path in protected_gets:
             with self.subTest(method="GET", path=path):
@@ -754,6 +755,13 @@ class AuthenticationAndPortalTests(unittest.TestCase):
             headers=headers,
         )
         self.assertEqual(workout_start.status_code, 403)
+
+        plan_activation = self.client.post(
+            "/workout/start",
+            json={"plan_id": plan_id, "patient_id": 1},
+            headers=headers,
+        )
+        self.assertEqual(plan_activation.status_code, 403)
 
         # Denied requests must not mutate the protected source records.
         db.session.expire_all()
