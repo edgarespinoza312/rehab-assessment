@@ -2,7 +2,7 @@ import unittest
 
 from dashboard.app import app
 from dashboard.database import db
-from dashboard.models import AssessmentRecord, Patient, PatientAssignment, Role, User
+from dashboard.models import AssessmentRecord, Patient, PatientAssignment, Role, User, WorkoutPlan
 from dashboard.services.authentication import hash_password
 
 
