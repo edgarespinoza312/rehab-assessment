@@ -646,5 +646,105 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
 
 
+    def test_other_clinician_isolation_covers_reports_apis_deletion_and_workout_plans(self):
+        """A clinician without an active assignment cannot access patient-linked records."""
+        record = AssessmentRecord(
+            assessment_id=101,
+            patient_id=1,
+            exercise="Left Bicep Curl",
+            repetitions=3,
+            average_score=75.0,
+            best_score=85.0,
+            worst_score=65.0,
+            feedback="[]",
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        # Create a patient-scoped plan as the currently assigned clinician.
+        self._login("clinician@example.test", "CLINICIAN")
+        created = self.client.post(
+            "/workout/plans",
+            json={
+                "name": "Patient 1 private plan",
+                "patient_id": 1,
+                "exercises": [{
+                    "position": 0,
+                    "exercise_id": "bicep_curl",
+                    "side": "left",
+                    "target_repetitions": 5,
+                }],
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        plan_id = created.get_json()["plan_id"]
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("other-clinician@example.test", "CLINICIAN")
+        csrf = self._csrf()
+        headers = {"X-CSRF-Token": csrf}
+
+        # HTML endpoints deliberately conceal another clinician's record.
+        self.assertEqual(self.client.get("/patients/1").status_code, 403)
+        self.assertEqual(self.client.get("/assessment/101").status_code, 404)
+
+        notes = self.client.post(
+            "/assessment/101/notes",
+            data={"csrf_token": csrf, "notes": "unauthorized change"},
+        )
+        self.assertEqual(notes.status_code, 404)
+        deletion = self.client.post("/assessment/101/delete", headers=headers)
+        self.assertEqual(deletion.status_code, 403)
+
+        # The same assignment policy must apply to every patient-scoped API.
+        protected_gets = [
+            "/api/patients/1/progression",
+            "/api/patients/1/progression/context",
+            "/api/patients/1/progression/advisory",
+            "/api/patients/1/progression/advisory/reviews?exercise_id=bicep_curl&side=left",
+            "/api/assessments/101/corrections",
+        ]
+        for path in protected_gets:
+            with self.subTest(method="GET", path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 403, path)
+
+        correction = self.client.post(
+            "/api/assessments/101/corrections",
+            json={
+                "field_name": "average_score",
+                "proposed_value": 10,
+                "reason": "Unauthorized cross-clinician request",
+                "evidence_reference": "test",
+            },
+            headers=headers,
+        )
+        self.assertEqual(correction.status_code, 403)
+
+        plan_review_page = self.client.get(f"/review/workout-plans/{plan_id}")
+        self.assertEqual(plan_review_page.status_code, 404)
+        plan_review = self.client.post(
+            f"/workout/plans/{plan_id}/review",
+            json={"decision": "approve", "rationale": "Unauthorized reviewer"},
+            headers=headers,
+        )
+        self.assertEqual(plan_review.status_code, 403)
+
+        workout_start = self.client.post(
+            "/workout/start",
+            json={"preset_id": "bilateral_bicep_curl_2", "patient_id": 1},
+            headers=headers,
+        )
+        self.assertEqual(workout_start.status_code, 403)
+
+        # Denied requests must not mutate the protected source records.
+        db.session.expire_all()
+        stored_record = db.session.get(AssessmentRecord, 101)
+        self.assertEqual(stored_record.notes, None)
+        self.assertEqual(stored_record.average_score, 75.0)
+        self.assertIsNotNone(db.session.get(WorkoutPlan, plan_id))
+
+
 if __name__ == "__main__":
     unittest.main()
