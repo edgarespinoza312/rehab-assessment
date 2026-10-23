@@ -776,13 +776,15 @@ class AuthenticationAndPortalTests(unittest.TestCase):
 
         # A patient may report an incident, but cannot browse the global queue
         # or manage another reporter's case.
+        other_patient = db.session.get(Patient, 2)
+        patient_role = Role.query.filter_by(name="PATIENT").one()
         other_patient_user = User(
             display_name="Other Patient",
             email="other-patient@example.test",
             password_hash=hash_password("correct horse"),
-            patient=Patient.query.get(2),
+            patient=other_patient,
+            roles=[patient_role],
         )
-        other_patient_user.roles = [Role.query.filter_by(name="PATIENT").one()]
         db.session.add(other_patient_user)
         db.session.commit()
 
