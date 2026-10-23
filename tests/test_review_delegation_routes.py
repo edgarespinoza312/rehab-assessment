@@ -154,5 +154,60 @@ class ReviewDelegationRouteTests(unittest.TestCase):
         self.assertEqual(activation.status_code, 403)
 
 
+    def test_revoked_delegation_denies_review_but_preserves_history(self):
+        self._login("owner@example.test")
+        plan_id = self._create_plan(
+            self.patient_one.patient_id, "Revocation-check plan"
+        )
+        grant_response = self.client.post(
+            f"/api/patients/{self.patient_one.patient_id}/review-delegations",
+            json={
+                "reviewer_user_id": self.reviewer.user_id,
+                "scope": "plan_approval",
+                "reason": "Independent review before activation.",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(
+            grant_response.status_code, 201, grant_response.get_data(as_text=True)
+        )
+        delegation_id = grant_response.get_json()["delegation_id"]
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("reviewer@example.test")
+        self.assertEqual(
+            self.client.get(f"/review/workout-plans/{plan_id}").status_code, 200
+        )
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("owner@example.test")
+        revoke_response = self.client.post(
+            f"/api/patient-review-delegations/{delegation_id}/revoke",
+            json={"reason": "The independent review request has ended."},
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(
+            revoke_response.status_code, 200, revoke_response.get_data(as_text=True)
+        )
+        self.assertIsNotNone(revoke_response.get_json()["revoked_at"])
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("reviewer@example.test")
+        self.assertEqual(
+            self.client.get(f"/review/workout-plans/{plan_id}").status_code, 404
+        )
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("owner@example.test")
+        history_response = self.client.get(
+            f"/api/patients/{self.patient_one.patient_id}/review-delegations"
+        )
+        self.assertEqual(history_response.status_code, 200)
+        grants = history_response.get_json()["delegations"]
+        self.assertEqual(len(grants), 1)
+        self.assertEqual(grants[0]["delegation_id"], delegation_id)
+        self.assertIsNotNone(grants[0]["revoked_at"])
+
+
 if __name__ == "__main__":
     unittest.main()
