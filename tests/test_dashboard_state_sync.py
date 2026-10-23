@@ -1082,5 +1082,30 @@ class DashboardAssessmentStateSyncTests(unittest.TestCase):
         self.assertEqual(_test_pose.side, "Left")
 
 
+    def test_legacy_assessment_rejects_unvalidated_profile_without_engineering_opt_in(self):
+        dashboard.app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = False
+        response = self._run_request(
+            "post",
+            "/assessment",
+            data={"exercise": "LEFT_BICEP_CURL", "patient_id": 8},
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("not clinically validated", response.get_json()["error"])
+        context = dashboard.runtime_context_for_request(create=False)
+        self.assertTrue(context is None or context.session is None)
+
+    def test_builtin_workout_preset_rejects_unvalidated_profile_without_engineering_opt_in(self):
+        dashboard.app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = False
+        response = self._run_request(
+            "post",
+            "/workout/start",
+            json={"preset_id": "bilateral_bicep_curl_2", "patient_id": 8},
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("not clinically validated", response.get_json()["error"])
+        context = dashboard.runtime_context_for_request(create=False)
+        self.assertTrue(context is None or context.workout_runtime is None)
+
+
 if __name__ == "__main__":
     unittest.main()
