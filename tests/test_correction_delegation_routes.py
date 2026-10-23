@@ -241,5 +241,73 @@ class CorrectionDelegationRouteTests(unittest.TestCase):
         self.assertEqual(owner_detail.status_code, 200, owner_detail.get_data(as_text=True))
         self.assertEqual(owner_detail.get_json()["status"], "pending")
 
+
+    def test_assignment_transfer_invalidates_correction_delegation_at_route_level(self):
+        from dashboard.models import PatientReviewDelegation, Role
+        from dashboard.services.patient_assignments import assign_patient
+
+        self._login("owner@example.test")
+        created = self.client.post(
+            f"/api/assessments/{self.assessment_id}/corrections",
+            json={
+                "field_name": "average_score",
+                "proposed_value": 82.0,
+                "reason": "A transcription error was confirmed against the source record.",
+                "evidence_reference": "source-review-transfer-123",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        correction_id = created.get_json()["correction_id"]
+        grant = self.client.post(
+            f"/api/patients/{self.patient.patient_id}/review-delegations",
+            json={
+                "reviewer_user_id": self.reviewer.user_id,
+                "scope": "assessment_correction",
+                "reason": "Independent review is required before reconciliation.",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(grant.status_code, 201, grant.get_data(as_text=True))
+
+        admin_role = Role(name="ADMIN")
+        admin = User(
+            display_name="Test Administrator",
+            email="admin@example.test",
+            password_hash=hash_password("correct horse"),
+            roles=[admin_role],
+        )
+        db.session.add_all([admin_role, admin])
+        db.session.commit()
+        assign_patient(
+            self.patient.patient_id,
+            self.other.user_id,
+            admin.user_id,
+            allow_reassignment=True,
+            reason="Coverage transfer during independent review.",
+        )
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("reviewer@example.test")
+        detail = self.client.get(f"/api/assessment-corrections/{correction_id}")
+        self.assertEqual(detail.status_code, 403, detail.get_data(as_text=True))
+        review = self.client.post(
+            f"/api/assessment-corrections/{correction_id}/review",
+            json={
+                "decision": "accept",
+                "rationale": "The source record supports the proposed correction.",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(review.status_code, 403, review.get_data(as_text=True))
+
+        grants = PatientReviewDelegation.query.filter_by(
+            patient_id=self.patient.patient_id,
+            delegated_to_user_id=self.reviewer.user_id,
+            scope="assessment_correction",
+        ).all()
+        self.assertEqual(len(grants), 1)
+        self.assertIsNone(grants[0].revoked_at)
+
 if __name__ == "__main__":
     unittest.main()
