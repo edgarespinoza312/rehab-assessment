@@ -13,6 +13,10 @@ class ExerciseType(Enum):
     LEFT_TRICEP_EXTENSION = auto()
     RIGHT_TRICEP_EXTENSION = auto()
 
+    # Knee
+    LEFT_KNEE_EXTENSION = auto()
+    RIGHT_KNEE_EXTENSION = auto()
+
     # ==========================================================
     # Shoulder
     # ==========================================================

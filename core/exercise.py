@@ -66,6 +66,42 @@ class ExerciseEngine:
                     metrics,
                 )
 
+            case ExerciseType.LEFT_TRICEP_EXTENSION:
+                self._analyze_reverse_angle(
+                    ExerciseType.LEFT_TRICEP_EXTENSION, metrics.elbow_angle_left,
+                    metrics, start_threshold=90.0, end_threshold=150.0,
+                )
+
+            case ExerciseType.RIGHT_TRICEP_EXTENSION:
+                self._analyze_reverse_angle(
+                    ExerciseType.RIGHT_TRICEP_EXTENSION, metrics.elbow_angle_right,
+                    metrics, start_threshold=90.0, end_threshold=150.0,
+                )
+
+            case ExerciseType.LEFT_KNEE_EXTENSION:
+                self._analyze_reverse_angle(
+                    ExerciseType.LEFT_KNEE_EXTENSION, metrics.knee_angle_left,
+                    metrics, start_threshold=110.0, end_threshold=150.0,
+                )
+
+            case ExerciseType.RIGHT_KNEE_EXTENSION:
+                self._analyze_reverse_angle(
+                    ExerciseType.RIGHT_KNEE_EXTENSION, metrics.knee_angle_right,
+                    metrics, start_threshold=110.0, end_threshold=150.0,
+                )
+
+            case ExerciseType.LEFT_SHOULDER_ABDUCTION:
+                self._analyze_reverse_angle(
+                    ExerciseType.LEFT_SHOULDER_ABDUCTION, metrics.shoulder_angle_left,
+                    metrics, start_threshold=25.0, end_threshold=70.0,
+                )
+
+            case ExerciseType.RIGHT_SHOULDER_ABDUCTION:
+                self._analyze_reverse_angle(
+                    ExerciseType.RIGHT_SHOULDER_ABDUCTION, metrics.shoulder_angle_right,
+                    metrics, start_threshold=25.0, end_threshold=70.0,
+                )
+
             case _:
                 raise NotImplementedError(
                     f"{profile.display_name} is not yet supported."
@@ -195,3 +231,50 @@ class ExerciseEngine:
             return
 
         self.state.phase = phase
+
+
+    def _analyze_reverse_angle(
+        self,
+        exercise: ExerciseType,
+        angle: float | None,
+        metrics: MovementMetrics,
+        *,
+        start_threshold: float,
+        end_threshold: float,
+    ):
+        """Recognize movements whose tracked angle increases during the lift."""
+        if angle is None:
+            self.state.active = False
+            self.state.exercise_name = None
+            self.state.rep_start_time = None
+            self._transition_to(ExercisePhase.IDLE)
+            return
+
+        self.state.active = True
+        self.state.exercise_name = exercise.name
+
+        if angle <= start_threshold:
+            if self.state.phase == ExercisePhase.LOWERING:
+                if self.state.rep_start_time is not None:
+                    duration = time.monotonic() - self.state.rep_start_time
+                    if duration > 0:
+                        metrics.rep_duration = duration
+                        self.state.repetitions += 1
+                        self.state.rep_completed = True
+                self.state.rep_start_time = None
+            self._transition_to(ExercisePhase.LOWERED)
+            return
+
+        if angle >= end_threshold:
+            self._transition_to(ExercisePhase.TOP)
+            return
+
+        if self.state.phase == ExercisePhase.LOWERED:
+            self.state.rep_started = True
+            self.state.rep_start_time = time.monotonic()
+            self._transition_to(ExercisePhase.LIFTING)
+            return
+
+        if self.state.phase == ExercisePhase.TOP:
+            self._transition_to(ExercisePhase.LOWERING)
+            return

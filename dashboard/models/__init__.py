@@ -6,7 +6,13 @@ from .workout import (
     WorkoutExerciseResult,
     WorkoutPlan,
     WorkoutPlanExercise,
+    WorkoutPlanReviewEvent,
 )
 from .review import ProgressionReviewEvent
 from .identity import Role, User, UserRole
 from .patient_assignment import PatientAssignment
+from .safety import SafetyIncident, SafetyIncidentEvent, SafetyCorrectiveAction, SafetyIncidentLink
+
+from .assessment_correction import AssessmentCorrection, AssessmentCorrectionEvent
+
+from .patient_review_delegation import PatientReviewDelegation

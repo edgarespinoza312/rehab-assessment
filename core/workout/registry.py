@@ -15,6 +15,30 @@ BUILTIN_EXERCISES = ExerciseDefinitionRegistry((
             get_profile(ExerciseType.RIGHT_BICEP_CURL),
         ),
     ),
+    ExerciseDefinition(
+        id="triceps_extension",
+        display_name="Triceps Extension (Engineering Evaluation Only)",
+        profiles=(
+            get_profile(ExerciseType.LEFT_TRICEP_EXTENSION),
+            get_profile(ExerciseType.RIGHT_TRICEP_EXTENSION),
+        ),
+    ),
+    ExerciseDefinition(
+        id="knee_extension",
+        display_name="Knee Extension (Engineering Evaluation Only)",
+        profiles=(
+            get_profile(ExerciseType.LEFT_KNEE_EXTENSION),
+            get_profile(ExerciseType.RIGHT_KNEE_EXTENSION),
+        ),
+    ),
+    ExerciseDefinition(
+        id="shoulder_abduction",
+        display_name="Shoulder Abduction (Engineering Evaluation Only)",
+        profiles=(
+            get_profile(ExerciseType.LEFT_SHOULDER_ABDUCTION),
+            get_profile(ExerciseType.RIGHT_SHOULDER_ABDUCTION),
+        ),
+    ),
 ))
 
 

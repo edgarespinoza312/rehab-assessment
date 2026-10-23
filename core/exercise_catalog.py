@@ -1,105 +1,155 @@
+"""Profiles for movement patterns implemented by the assessment engine.
+
+Profiles marked engineering_only are exposed for controlled engineering
+evaluation, not as clinically validated protocols or treatment advice.
 """
-exercise_catalog.py
+from core.models import ExerciseProfile, ExerciseType
 
-Registers every rehabilitation assessment supported by the
-ESPZ Rehabilitation Assessment System.
 
-Each ExerciseType maps to a corresponding ExerciseProfile.
-
-The Assessment Engine, Exercise Engine, and UI use this registry
-to retrieve the active exercise profile.
-"""
-
-from core.models import (
-    ExerciseProfile,
-    ExerciseType,
+_EXERCISE_ONLY_NOTICE = (
+    "Engineering evaluation only; thresholds and measurement performance "
+    "have not been clinically validated."
 )
 
+
 EXERCISE_CATALOG = {
-
-    # ==========================================================
-    # Elbow
-    # ==========================================================
-
     ExerciseType.LEFT_BICEP_CURL: ExerciseProfile(
         exercise=ExerciseType.LEFT_BICEP_CURL,
         display_name="Left Bicep Curl",
         category="Elbow",
         description="Repeated elbow flexion of the left arm.",
-
         primary_joint="Elbow",
         movement_plane="Sagittal",
         target_side="Left",
-
-        # NEW
-        tracked_joints=[
-            "Left Elbow",
-        ],
-
-        # ------------------------------------------------------
-        # Assessment Targets
-        # ------------------------------------------------------
-
-        # Approximately 175° → 35° elbow motion
+        tracked_joints=["Left Elbow"],
         target_rom=140.0,
-
-        # Fully extended elbow
         target_extension=175.0,
-
-        # Fully flexed elbow
         target_flexion=35.0,
-
-        # One smooth repetition
         ideal_rep_time=2.0,
-
-        # Acceptable timing window
         minimum_rep_time=1.0,
         maximum_rep_time=4.0,
     ),
-
     ExerciseType.RIGHT_BICEP_CURL: ExerciseProfile(
         exercise=ExerciseType.RIGHT_BICEP_CURL,
         display_name="Right Bicep Curl",
         category="Elbow",
         description="Repeated elbow flexion of the right arm.",
-
         primary_joint="Elbow",
         movement_plane="Sagittal",
         target_side="Right",
-
-        # NEW
-        tracked_joints=[
-            "Right Elbow",
-        ],
-
-        # ------------------------------------------------------
-        # Assessment Targets
-        # ------------------------------------------------------
-
+        tracked_joints=["Right Elbow"],
         target_rom=140.0,
         target_extension=175.0,
         target_flexion=35.0,
-
         ideal_rep_time=2.0,
         minimum_rep_time=1.0,
         maximum_rep_time=4.0,
     ),
-
+    ExerciseType.LEFT_TRICEP_EXTENSION: ExerciseProfile(
+        exercise=ExerciseType.LEFT_TRICEP_EXTENSION,
+        display_name="Left Triceps Extension (Engineering Evaluation Only)",
+        category="Elbow",
+        description=f"Repeated extension of the left elbow. {_EXERCISE_ONLY_NOTICE}",
+        primary_joint="Elbow",
+        movement_plane="Sagittal",
+        target_side="Left",
+        tracked_joints=["Left Elbow"],
+        target_rom=90.0,
+        target_extension=160.0,
+        target_flexion=70.0,
+        ideal_rep_time=2.0,
+        minimum_rep_time=1.0,
+        maximum_rep_time=4.0,
+        validation_status="engineering_only",
+    ),
+    ExerciseType.RIGHT_TRICEP_EXTENSION: ExerciseProfile(
+        exercise=ExerciseType.RIGHT_TRICEP_EXTENSION,
+        display_name="Right Triceps Extension (Engineering Evaluation Only)",
+        category="Elbow",
+        description=f"Repeated extension of the right elbow. {_EXERCISE_ONLY_NOTICE}",
+        primary_joint="Elbow",
+        movement_plane="Sagittal",
+        target_side="Right",
+        tracked_joints=["Right Elbow"],
+        target_rom=90.0,
+        target_extension=160.0,
+        target_flexion=70.0,
+        ideal_rep_time=2.0,
+        minimum_rep_time=1.0,
+        maximum_rep_time=4.0,
+        validation_status="engineering_only",
+    ),
+    ExerciseType.LEFT_SHOULDER_ABDUCTION: ExerciseProfile(
+        exercise=ExerciseType.LEFT_SHOULDER_ABDUCTION,
+        display_name="Left Shoulder Abduction (Engineering Evaluation Only)",
+        category="Shoulder",
+        description=f"Raise the left arm laterally and return to the starting position. {_EXERCISE_ONLY_NOTICE}",
+        primary_joint="Shoulder",
+        movement_plane="Frontal",
+        target_side="Left",
+        tracked_joints=["Left Shoulder"],
+        target_rom=80.0,
+        target_extension=10.0,
+        target_flexion=90.0,
+        ideal_rep_time=2.0,
+        minimum_rep_time=1.0,
+        maximum_rep_time=4.0,
+        validation_status="engineering_only",
+    ),
+    ExerciseType.RIGHT_SHOULDER_ABDUCTION: ExerciseProfile(
+        exercise=ExerciseType.RIGHT_SHOULDER_ABDUCTION,
+        display_name="Right Shoulder Abduction (Engineering Evaluation Only)",
+        category="Shoulder",
+        description=f"Raise the right arm laterally and return to the starting position. {_EXERCISE_ONLY_NOTICE}",
+        primary_joint="Shoulder",
+        movement_plane="Frontal",
+        target_side="Right",
+        tracked_joints=["Right Shoulder"],
+        target_rom=80.0,
+        target_extension=10.0,
+        target_flexion=90.0,
+        ideal_rep_time=2.0,
+        minimum_rep_time=1.0,
+        maximum_rep_time=4.0,
+        validation_status="engineering_only",
+    ),
+    ExerciseType.LEFT_KNEE_EXTENSION: ExerciseProfile(
+        exercise=ExerciseType.LEFT_KNEE_EXTENSION,
+        display_name="Left Knee Extension (Engineering Evaluation Only)",
+        category="Knee",
+        description=f"Extend the left knee from a flexed position and return. {_EXERCISE_ONLY_NOTICE}",
+        primary_joint="Knee",
+        movement_plane="Sagittal",
+        target_side="Left",
+        tracked_joints=["Left Knee"],
+        target_rom=70.0,
+        target_extension=175.0,
+        target_flexion=105.0,
+        ideal_rep_time=2.0,
+        minimum_rep_time=1.0,
+        maximum_rep_time=4.0,
+        validation_status="engineering_only",
+    ),
+    ExerciseType.RIGHT_KNEE_EXTENSION: ExerciseProfile(
+        exercise=ExerciseType.RIGHT_KNEE_EXTENSION,
+        display_name="Right Knee Extension (Engineering Evaluation Only)",
+        category="Knee",
+        description=f"Extend the right knee from a flexed position and return. {_EXERCISE_ONLY_NOTICE}",
+        primary_joint="Knee",
+        movement_plane="Sagittal",
+        target_side="Right",
+        tracked_joints=["Right Knee"],
+        target_rom=70.0,
+        target_extension=175.0,
+        target_flexion=105.0,
+        ideal_rep_time=2.0,
+        minimum_rep_time=1.0,
+        maximum_rep_time=4.0,
+        validation_status="engineering_only",
+    ),
 }
 
 
 def get_exercise_profile(exercise: ExerciseType) -> ExerciseProfile:
-    """
-    Returns the ExerciseProfile associated with an ExerciseType.
-
-    Parameters
-    ----------
-    exercise : ExerciseType
-        The rehabilitation assessment to retrieve.
-
-    Returns
-    -------
-    ExerciseProfile
-        The corresponding exercise profile.
-    """
+    """Return the configured profile for an ExerciseType."""
     return EXERCISE_CATALOG[exercise]

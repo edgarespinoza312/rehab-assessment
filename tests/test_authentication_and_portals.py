@@ -2,7 +2,7 @@ import unittest
 
 from dashboard.app import app
 from dashboard.database import db
-from dashboard.models import AssessmentRecord, Patient, PatientAssignment, Role, User
+from dashboard.models import AssessmentRecord, Patient, PatientAssignment, Role, User, WorkoutPlan
 from dashboard.services.authentication import hash_password
 
 
@@ -369,6 +369,15 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
     def test_finished_legacy_assessment_no_longer_exposes_camera_endpoints(self):
+        # This test covers runtime cleanup, not clinical validation. Explicitly
+        # opt into unvalidated engineering profiles for the test only.
+        original_opt_in = app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+        self.addCleanup(
+            app.config.__setitem__,
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES",
+            original_opt_in,
+        )
+        app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         self._login("clinician@example.test", "CLINICIAN")
         token = self._csrf()
         started = self.client.post(
@@ -390,6 +399,15 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
     def test_cancelled_workout_no_longer_exposes_camera_endpoints(self):
+        # This test covers runtime cleanup, not clinical validation. Explicitly
+        # opt into unvalidated engineering profiles for the test only.
+        original_opt_in = app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+        self.addCleanup(
+            app.config.__setitem__,
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES",
+            original_opt_in,
+        )
+        app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         self._login("clinician@example.test", "CLINICIAN")
         started = self.client.post(
             "/workout/start",
@@ -600,6 +618,23 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(active.clinician_user_id, next_clinician.user_id)
         self.assertEqual(PatientAssignment.query.filter_by(patient_id=1).count(), 2)
 
+        # Authorization follows the active assignment, not historical ownership.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("clinician@example.test", "CLINICIAN")
+        self.assertEqual(self.client.get("/patients/1").status_code, 403)
+        self.assertEqual(
+            self.client.get("/api/patients/1/progression").status_code,
+            403,
+        )
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("other-clinician@example.test", "CLINICIAN")
+        self.assertEqual(self.client.get("/patients/1").status_code, 200)
+        self.assertEqual(
+            self.client.get("/api/patients/1/progression").status_code,
+            200,
+        )
+
     def test_clinician_patient_profile_alias_reaches_protected_profile(self):
         self._login("clinician@example.test", "CLINICIAN")
         response = self.client.get(
@@ -626,6 +661,178 @@ class AuthenticationAndPortalTests(unittest.TestCase):
                            "side": "left", "target_repetitions": 5}],
         }, headers={"X-CSRF-Token": self._csrf()})
         self.assertEqual(response.status_code, 201)
+
+
+    def test_other_clinician_isolation_covers_reports_apis_deletion_and_workout_plans(self):
+        """A clinician without an active assignment cannot access patient-linked records."""
+        record = AssessmentRecord(
+            assessment_id=101,
+            patient_id=1,
+            exercise="Left Bicep Curl",
+            repetitions=3,
+            average_score=75.0,
+            best_score=85.0,
+            worst_score=65.0,
+            feedback="[]",
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        # Create a patient-scoped plan as the currently assigned clinician.
+        self._login("clinician@example.test", "CLINICIAN")
+        created = self.client.post(
+            "/workout/plans",
+            json={
+                "name": "Patient 1 private plan",
+                "patient_id": 1,
+                "exercises": [{
+                    "position": 0,
+                    "exercise_id": "bicep_curl",
+                    "side": "left",
+                    "target_repetitions": 5,
+                }],
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        plan_id = created.get_json()["plan_id"]
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("other-clinician@example.test", "CLINICIAN")
+        csrf = self._csrf()
+        headers = {"X-CSRF-Token": csrf}
+
+        # HTML endpoints deliberately conceal another clinician's record.
+        self.assertEqual(self.client.get("/patients/1").status_code, 403)
+        self.assertEqual(self.client.get("/assessment/101").status_code, 404)
+
+        notes = self.client.post(
+            "/assessment/101/notes",
+            data={"csrf_token": csrf, "notes": "unauthorized change"},
+        )
+        self.assertEqual(notes.status_code, 404)
+        deletion = self.client.post("/assessment/101/delete", headers=headers)
+        self.assertEqual(deletion.status_code, 403)
+
+        # The same assignment policy must apply to every patient-scoped API.
+        protected_gets = [
+            "/api/patients/1/progression",
+            "/api/patients/1/progression/context",
+            "/api/patients/1/progression/advisory",
+            "/api/patients/1/progression/advisory/reviews?exercise_id=bicep_curl&side=left",
+            "/api/assessments/101/corrections",
+            "/api/assessments/101/effective-values",
+        ]
+        for path in protected_gets:
+            with self.subTest(method="GET", path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 403, path)
+
+        correction = self.client.post(
+            "/api/assessments/101/corrections",
+            json={
+                "field_name": "average_score",
+                "proposed_value": 10,
+                "reason": "Unauthorized cross-clinician request",
+                "evidence_reference": "test",
+            },
+            headers=headers,
+        )
+        self.assertEqual(correction.status_code, 403)
+
+        plan_review_page = self.client.get(f"/review/workout-plans/{plan_id}")
+        self.assertEqual(plan_review_page.status_code, 404)
+        plan_review = self.client.post(
+            f"/workout/plans/{plan_id}/review",
+            json={"decision": "approve", "rationale": "Unauthorized reviewer"},
+            headers=headers,
+        )
+        self.assertEqual(plan_review.status_code, 403)
+
+        workout_start = self.client.post(
+            "/workout/start",
+            json={"preset_id": "bilateral_bicep_curl_2", "patient_id": 1},
+            headers=headers,
+        )
+        self.assertEqual(workout_start.status_code, 403)
+
+        plan_activation = self.client.post(
+            "/workout/start",
+            json={"plan_id": plan_id, "patient_id": 1},
+            headers=headers,
+        )
+        self.assertEqual(plan_activation.status_code, 403)
+
+        # Denied requests must not mutate the protected source records.
+        db.session.expire_all()
+        stored_record = db.session.get(AssessmentRecord, 101)
+        self.assertEqual(stored_record.notes, None)
+        self.assertEqual(stored_record.average_score, 75.0)
+        self.assertIsNotNone(db.session.get(WorkoutPlan, plan_id))
+
+
+    def test_safety_incident_routes_enforce_reporter_and_safety_lead_boundaries(self):
+        from dashboard.models import SafetyIncident
+
+        # A patient may report an incident, but cannot browse the global queue
+        # or manage another reporter's case.
+        other_patient = db.session.get(Patient, 2)
+        patient_role = Role.query.filter_by(name="PATIENT").one()
+        other_patient_user = User(
+            display_name="Other Patient",
+            email="other-patient@example.test",
+            password_hash=hash_password("correct horse"),
+            patient=other_patient,
+            roles=[patient_role],
+        )
+        db.session.add(other_patient_user)
+        db.session.commit()
+
+        self._login("patient@example.test", "PATIENT")
+        csrf = self._csrf()
+        reported = self.client.post(
+            "/api/safety/incidents",
+            json={
+                "category": "measurement_quality",
+                "summary": "Assessment result looked inconsistent",
+                "details": "The reported score did not match the observed movement.",
+                "severity": "low",
+                "likelihood": "possible",
+                "evidence_strength": "moderate",
+                "exposure_count": 1,
+                "control_failure": False,
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(reported.status_code, 201, reported.get_data(as_text=True))
+        incident_id = reported.get_json()["incident_id"]
+        self.assertIsNotNone(db.session.get(SafetyIncident, incident_id))
+
+        self.assertEqual(self.client.get("/api/safety/incidents").status_code, 403)
+        denied_triage = self.client.post(
+            f"/api/safety/incidents/{incident_id}/triage",
+            json={"root_cause_status": "unknown",
+                  "root_cause_notes": "Not authorized to triage."},
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(denied_triage.status_code, 403)
+
+        # A different patient cannot read the reporter's incident details.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("other-patient@example.test", "PATIENT")
+        self.assertEqual(
+            self.client.get(f"/api/safety/incidents/{incident_id}").status_code,
+            403,
+        )
+
+        # Safety-lead roles can access the detail and global queue.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("clinician@example.test", "CLINICIAN")
+        self.assertEqual(
+            self.client.get(f"/api/safety/incidents/{incident_id}").status_code,
+            200,
+        )
+        self.assertEqual(self.client.get("/api/safety/incidents").status_code, 200)
 
 
 if __name__ == "__main__":

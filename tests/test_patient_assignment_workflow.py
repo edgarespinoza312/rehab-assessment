@@ -8,6 +8,8 @@ from dashboard.services.authentication import hash_password
 
 class PatientAssignmentWorkflowTests(unittest.TestCase):
     def setUp(self):
+        # Exercise engineering workflows explicitly; production configuration forbids this opt-in.
+        app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         self.context = app.app_context()
         self.context.push()
         db.session.rollback()
@@ -554,12 +556,19 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
 
     def test_active_workout_access_is_revoked_when_patient_assignment_ends(self):
         from core.workout import WorkoutPrescription
-        from dashboard.services.workout_persistence import create_workout_plan
+        from dashboard.services.workout_persistence import create_workout_plan, review_workout_plan
 
         plan = create_workout_plan(
             "Runtime revocation plan",
             (WorkoutPrescription("bicep_curl", "left", 4),),
             patient_id=self.patient_id,
+            created_by_user_id=self.clinician_two_id,
+        )
+        review_workout_plan(
+            plan.plan_id,
+            self.clinician_one_id,
+            "approve",
+            "Independent approval for assignment access regression test.",
         )
 
         admin = app.test_client()
@@ -611,12 +620,19 @@ class PatientAssignmentWorkflowTests(unittest.TestCase):
 
     def test_active_workout_access_is_revoked_after_assignment_transfer(self):
         from core.workout import WorkoutPrescription
-        from dashboard.services.workout_persistence import create_workout_plan
+        from dashboard.services.workout_persistence import create_workout_plan, review_workout_plan
 
         plan = create_workout_plan(
             "Assignment transfer runtime plan",
             (WorkoutPrescription("bicep_curl", "left", 4),),
             patient_id=self.patient_id,
+            created_by_user_id=self.clinician_two_id,
+        )
+        review_workout_plan(
+            plan.plan_id,
+            self.clinician_one_id,
+            "approve",
+            "Independent approval for assignment access regression test.",
         )
 
         admin = app.test_client()
