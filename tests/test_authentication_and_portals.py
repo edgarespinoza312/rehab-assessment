@@ -369,6 +369,15 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
     def test_finished_legacy_assessment_no_longer_exposes_camera_endpoints(self):
+        # This test covers runtime cleanup, not clinical validation. Explicitly
+        # opt into unvalidated engineering profiles for the test only.
+        original_opt_in = app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+        self.addCleanup(
+            app.config.__setitem__,
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES",
+            original_opt_in,
+        )
+        app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         self._login("clinician@example.test", "CLINICIAN")
         token = self._csrf()
         started = self.client.post(
@@ -390,6 +399,15 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(self.client.get("/video_status").status_code, 404)
 
     def test_cancelled_workout_no_longer_exposes_camera_endpoints(self):
+        # This test covers runtime cleanup, not clinical validation. Explicitly
+        # opt into unvalidated engineering profiles for the test only.
+        original_opt_in = app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+        self.addCleanup(
+            app.config.__setitem__,
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES",
+            original_opt_in,
+        )
+        app.config["REVALIV_ENABLE_UNVALIDATED_EXERCISES"] = True
         self._login("clinician@example.test", "CLINICIAN")
         started = self.client.post(
             "/workout/start",
