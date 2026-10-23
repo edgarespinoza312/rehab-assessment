@@ -771,5 +771,67 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertIsNotNone(db.session.get(WorkoutPlan, plan_id))
 
 
+    def test_safety_incident_routes_enforce_reporter_and_safety_lead_boundaries(self):
+        from dashboard.models import SafetyIncident
+
+        # A patient may report an incident, but cannot browse the global queue
+        # or manage another reporter's case.
+        other_patient_user = User(
+            display_name="Other Patient",
+            email="other-patient@example.test",
+            password_hash=hash_password("correct horse"),
+            patient=Patient.query.get(2),
+        )
+        other_patient_user.roles = [Role.query.filter_by(name="PATIENT").one()]
+        db.session.add(other_patient_user)
+        db.session.commit()
+
+        self._login("patient@example.test", "PATIENT")
+        csrf = self._csrf()
+        reported = self.client.post(
+            "/api/safety/incidents",
+            json={
+                "category": "measurement_quality",
+                "summary": "Assessment result looked inconsistent",
+                "details": "The reported score did not match the observed movement.",
+                "severity": "low",
+                "likelihood": "possible",
+                "evidence_strength": "moderate",
+                "exposure_count": 1,
+                "control_failure": False,
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        self.assertEqual(reported.status_code, 201, reported.get_data(as_text=True))
+        incident_id = reported.get_json()["incident_id"]
+        self.assertIsNotNone(db.session.get(SafetyIncident, incident_id))
+
+        self.assertEqual(self.client.get("/api/safety/incidents").status_code, 403)
+        denied_triage = self.client.post(
+            f"/api/safety/incidents/{incident_id}/triage",
+            json={"root_cause_status": "unknown",
+                  "root_cause_notes": "Not authorized to triage."},
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(denied_triage.status_code, 403)
+
+        # A different patient cannot read the reporter's incident details.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("other-patient@example.test", "PATIENT")
+        self.assertEqual(
+            self.client.get(f"/api/safety/incidents/{incident_id}").status_code,
+            403,
+        )
+
+        # Safety-lead roles can access the detail and global queue.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("clinician@example.test", "CLINICIAN")
+        self.assertEqual(
+            self.client.get(f"/api/safety/incidents/{incident_id}").status_code,
+            200,
+        )
+        self.assertEqual(self.client.get("/api/safety/incidents").status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main()
