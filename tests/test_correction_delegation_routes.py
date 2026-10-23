@@ -173,5 +173,73 @@ class CorrectionDelegationRouteTests(unittest.TestCase):
         )
 
 
+    def test_revoked_assessment_correction_delegation_denies_detail_and_review(self):
+        self._login("owner@example.test")
+        created = self.client.post(
+            f"/api/assessments/{self.assessment_id}/corrections",
+            json={
+                "field_name": "average_score",
+                "proposed_value": 82.0,
+                "reason": "A transcription error was confirmed against the source record.",
+                "evidence_reference": "source-review-revocation-123",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        correction_id = created.get_json()["correction_id"]
+
+        grant = self.client.post(
+            f"/api/patients/{self.patient.patient_id}/review-delegations",
+            json={
+                "reviewer_user_id": self.reviewer.user_id,
+                "scope": "assessment_correction",
+                "reason": "Independent review is required before reconciliation.",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(grant.status_code, 201, grant.get_data(as_text=True))
+        delegation_id = grant.get_json()["delegation_id"]
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("reviewer@example.test")
+        self.assertEqual(
+            self.client.get(f"/api/assessment-corrections/{correction_id}").status_code,
+            200,
+        )
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("owner@example.test")
+        revoked = self.client.post(
+            f"/api/patient-review-delegations/{delegation_id}/revoke",
+            json={"reason": "Independent review is no longer required."},
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(revoked.status_code, 200, revoked.get_data(as_text=True))
+        self.assertIsNotNone(revoked.get_json()["revoked_at"])
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("reviewer@example.test")
+        detail = self.client.get(f"/api/assessment-corrections/{correction_id}")
+        self.assertEqual(detail.status_code, 403, detail.get_data(as_text=True))
+        review = self.client.post(
+            f"/api/assessment-corrections/{correction_id}/review",
+            json={
+                "decision": "accept",
+                "rationale": "The source record supports the proposed correction.",
+            },
+            headers={"X-CSRF-Token": self._csrf()},
+        )
+        self.assertEqual(review.status_code, 403, review.get_data(as_text=True))
+
+        # The pending correction itself remains available to the assigned
+        # clinician; revocation removes delegated authorization, not history.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("owner@example.test")
+        owner_detail = self.client.get(
+            f"/api/assessment-corrections/{correction_id}"
+        )
+        self.assertEqual(owner_detail.status_code, 200, owner_detail.get_data(as_text=True))
+        self.assertEqual(owner_detail.get_json()["status"], "pending")
+
 if __name__ == "__main__":
     unittest.main()
