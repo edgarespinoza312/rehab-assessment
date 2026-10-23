@@ -138,11 +138,25 @@ For deployment, set these environment variables before starting Flask:
 
 Production must use a stable `REVALIV_SECRET_KEY` as already required by the application. Do not put SMTP credentials in source control.
 
-For automated tests, use an isolated SQLite database:
+For automated tests, install the development dependencies (including pytest) and use an isolated SQLite database:
 
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+**Linux / Jetson**
 ```bash
 REVALIV_DATABASE_URI=sqlite:// python -m pytest -q
 ```
+
+**PowerShell**
+```powershell
+$env:REVALIV_DATABASE_URI = "sqlite://"
+python -m pytest -q
+Remove-Item Env:REVALIV_DATABASE_URI
+```
+
+The tests use an isolated in-memory SQLite database and do not require a camera. Keep the development and runtime virtual environments activated when running these commands.
 
 ---
 
