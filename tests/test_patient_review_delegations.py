@@ -93,3 +93,68 @@ class PatientReviewDelegationTests(unittest.TestCase):
         self.assertFalse(has_active_review_delegation(self.reviewer.user_id, self.patient.patient_id, "assessment_correction"))
         # Delegation remains as historical evidence but is no longer effective.
         self.assertIsNone(db.session.get(PatientReviewDelegation, grant.delegation_id).revoked_at)
+
+    def test_duplicate_active_grant_is_rejected(self):
+        create_review_delegation(
+            self.patient.patient_id, self.owner.user_id, self.reviewer.user_id,
+            scope="plan_approval",
+            reason="Independent review of the treatment plan is required.",
+        )
+        with self.assertRaisesRegex(ReviewDelegationError, "already exists"):
+            create_review_delegation(
+                self.patient.patient_id, self.owner.user_id, self.reviewer.user_id,
+                scope="plan_approval",
+                reason="A duplicate active review grant must not be created.",
+            )
+        self.assertEqual(PatientReviewDelegation.query.count(), 1)
+
+    def test_inactive_reviewer_loses_effective_delegated_access(self):
+        grant = create_review_delegation(
+            self.patient.patient_id, self.owner.user_id, self.reviewer.user_id,
+            scope="assessment_correction",
+            reason="Independent correction review is required.",
+        )
+        self.reviewer.status = "DISABLED"
+        db.session.commit()
+        self.assertFalse(
+            has_active_review_delegation(
+                self.reviewer.user_id,
+                self.patient.patient_id,
+                "assessment_correction",
+            )
+        )
+        # Preserve the grant as historical evidence; disabled status alone
+        # removes effective access without rewriting the delegation record.
+        self.assertIsNone(
+            db.session.get(PatientReviewDelegation, grant.delegation_id).revoked_at
+        )
+
+    def test_only_grantor_or_active_admin_can_revoke_and_revoke_is_one_time(self):
+        grant = create_review_delegation(
+            self.patient.patient_id, self.owner.user_id, self.reviewer.user_id,
+            scope="plan_approval",
+            reason="Independent review of the treatment plan is required.",
+        )
+        with self.assertRaisesRegex(ReviewDelegationError, "grantor or an active admin"):
+            revoke_review_delegation(
+                grant.delegation_id,
+                self.other.user_id,
+                reason="An unrelated clinician must not revoke this grant.",
+            )
+        self.assertIsNone(
+            db.session.get(PatientReviewDelegation, grant.delegation_id).revoked_at
+        )
+        revoked = revoke_review_delegation(
+            grant.delegation_id,
+            self.owner.user_id,
+            reason="The independent review request is no longer active.",
+        )
+        self.assertIsNotNone(revoked.revoked_at)
+        with self.assertRaisesRegex(ReviewDelegationError, "already revoked"):
+            revoke_review_delegation(
+                grant.delegation_id,
+                self.owner.user_id,
+                reason="A repeated revocation attempt must be rejected.",
+            )
+        self.assertEqual(PatientReviewDelegation.query.count(), 1)
+
