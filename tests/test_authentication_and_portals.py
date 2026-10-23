@@ -618,6 +618,23 @@ class AuthenticationAndPortalTests(unittest.TestCase):
         self.assertEqual(active.clinician_user_id, next_clinician.user_id)
         self.assertEqual(PatientAssignment.query.filter_by(patient_id=1).count(), 2)
 
+        # Authorization follows the active assignment, not historical ownership.
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("clinician@example.test", "CLINICIAN")
+        self.assertEqual(self.client.get("/patients/1").status_code, 403)
+        self.assertEqual(
+            self.client.get("/api/patients/1/progression").status_code,
+            403,
+        )
+
+        self.client.post("/logout", data={"csrf_token": self._csrf()})
+        self._login("other-clinician@example.test", "CLINICIAN")
+        self.assertEqual(self.client.get("/patients/1").status_code, 200)
+        self.assertEqual(
+            self.client.get("/api/patients/1/progression").status_code,
+            200,
+        )
+
     def test_clinician_patient_profile_alias_reaches_protected_profile(self):
         self._login("clinician@example.test", "CLINICIAN")
         response = self.client.get(
