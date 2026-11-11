@@ -28,6 +28,97 @@ Assessment Report
 
     </div>
 
+    {% if historical %}
+    <section class="card" aria-labelledby="data-provenance-title">
+        <div class="panel-header"><h2 id="data-provenance-title">Data provenance and corrections</h2></div>
+        {% if report.effective_corrections %}
+        <p>Corrected values below are approved overlays. The original assessment record remains unchanged.</p>
+        <ul>
+            {% for correction in report.effective_corrections %}
+            <li>
+                Correction #{{ correction.correction_id }} changed {{ correction.field_name }}
+                after review by account {{ correction.reviewed_by_user_id }}
+                {% if correction.reviewed_at %}on {{ correction.reviewed_at }}{% endif %}.
+                {{ correction.reason }}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>No approved corrections are applied to this report.</p>
+        {% endif %}
+        {% if report.stale_correction_ids %}
+        <p role="alert"><strong>Correction review required.</strong>
+            Approved overlays were withheld because the source record changed or its audit trail did not validate.
+            Correction IDs: {{ report.stale_correction_ids|join(", ") }}.
+        </p>
+        {% endif %}
+        <p><small>Source snapshot SHA-256: {{ report.source_snapshot_hash }}</small></p>
+
+        {% if can_request_correction %}
+        <details>
+            <summary>Request a data correction</summary>
+            <form id="assessment-correction-form" data-assessment-id="{{ assessment.assessment_id }}">
+                <label for="correction-field">Field</label>
+                <select id="correction-field" name="field_name" required>
+                    <option value="average_score">Average score</option>
+                    <option value="best_score">Best score</option>
+                    <option value="worst_score">Worst score</option>
+                    <option value="repetitions">Repetitions</option>
+                    <option value="exercise">Exercise label</option>
+                    <option value="trend">Trend label</option>
+                    <option value="feedback">Feedback (text or JSON string array)</option>
+                </select>
+                <label for="correction-value">Proposed value</label>
+                <input id="correction-value" name="proposed_value" required maxlength="30000">
+                <label for="correction-reason">Reason</label>
+                <textarea id="correction-reason" name="reason" minlength="8" maxlength="4000" required></textarea>
+                <label for="correction-evidence">Evidence reference (optional)</label>
+                <input id="correction-evidence" name="evidence_reference" maxlength="500">
+                <button class="btn btn-primary" type="submit">Submit correction for independent review</button>
+                <p id="correction-submit-message" role="status" aria-live="polite"></p>
+            </form>
+        </details>
+
+        <details>
+            <summary>Delegate independent review</summary>
+            <form id="review-delegation-form" data-patient-id="{{ patient.patient_id }}">
+                <label for="delegated-reviewer-id">Reviewer account ID</label>
+                <input id="delegated-reviewer-id" name="reviewer_user_id" type="number" min="1" step="1" required>
+                <label for="delegated-review-scope">Review scope</label>
+                <select id="delegated-review-scope" name="scope" required>
+                    <option value="assessment_correction">Assessment correction</option>
+                    <option value="plan_approval">Workout plan approval</option>
+                </select>
+                <label for="delegated-review-reason">Delegation rationale</label>
+                <textarea id="delegated-review-reason" name="reason" minlength="8" maxlength="4000" required></textarea>
+                <button class="btn" type="submit">Grant limited review access</button>
+                <p id="review-delegation-message" role="status" aria-live="polite"></p>
+            </form>
+        </details>
+        {% endif %}
+
+        {% if correction_history %}
+        <h3>Correction requests</h3>
+        <ul>
+            {% for item in correction_history %}
+            <li>
+                <strong>#{{ item.correction_id }} — {{ item.field_name }} — {{ item.status|title }}</strong>
+                <p>Recorded: {{ item.original_value|tojson }}; proposed: {{ item.proposed_value|tojson }}</p>
+                <p>{{ item.reason }}</p>
+                {% if item.review_rationale %}<p>Review: {{ item.review_rationale }}</p>{% endif %}
+                {% if item.status == "pending" %}
+                <p>Share correction ID {{ item.correction_id }} with the delegated reviewer. Review URL:
+                    <code>/review/assessment-corrections/{{ item.correction_id }}</code>
+                </p>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+    <script defer src="{{ url_for('static', filename='js/assessment_corrections.js') }}"></script>
+    {% endif %}
+
     <!-- ============================================== -->
     <!-- Overall Performance -->
     <!-- ============================================== -->

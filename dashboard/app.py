@@ -19,7 +19,7 @@ from dashboard.database import db, migrate
 
 # Import models so SQLA
 # lchemy knows they exist
-from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User
+from dashboard.models import Patient, AssessmentRecord, PatientAssignment, Role, User, WorkoutPlan, SafetyIncident, SafetyCorrectiveAction, AssessmentCorrection, PatientReviewDelegation
 from dashboard.services.authentication import (
     current_identity,
     csrf_token,
@@ -125,6 +125,36 @@ from dashboard.services.workout_persistence import (
     list_workout_plans,
     load_workout_preset,
     persist_workout_session,
+    review_workout_plan,
+)
+from dashboard.services.patient_review_delegations import (
+    ReviewDelegationError,
+    create_review_delegation,
+    delegation_to_dict,
+    has_active_review_delegation,
+    revoke_review_delegation,
+)
+from dashboard.services.assessment_corrections import (
+    CorrectionWorkflowError,
+    correction_to_dict,
+    effective_assessment_values,
+    request_assessment_correction,
+    review_assessment_correction,
+)
+from dashboard.services.safety_incidents import (
+    SafetyWorkflowError,
+    SafetyRestrictionError,
+    active_safety_restrictions,
+    assert_safety_scope_allowed,
+    close_safety_incident,
+    create_corrective_action,
+    record_independent_safety_review,
+    reopen_safety_incident,
+    report_safety_incident,
+    safety_incident_to_dict,
+    triage_safety_incident,
+    update_corrective_action,
+    link_safety_incidents,
 )
 from dashboard.services.progression import (
     get_patient_progression,
@@ -609,6 +639,22 @@ def reap_idle_runtime_contexts():
     return None
 
 # ==========================================================
+# Exercise validation gate
+# ==========================================================
+
+def _exercise_validation_error(profile) -> str | None:
+    """Block non-validated exercise profiles outside explicit engineering mode."""
+    if profile.validation_status == "clinically_validated":
+        return None
+    if app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False):
+        return None
+    return (
+        f"{profile.display_name} is not clinically validated and is not "
+        "enabled for clinical sessions"
+    )
+
+
+# ==========================================================
 # Routes
 # ==========================================================
 
@@ -1013,6 +1059,349 @@ def update_assessment_notes(assessment_id):
         )
     )
 
+@app.route("/api/patients/<int:patient_id>/review-delegations", methods=["GET", "POST"])
+@require_auth
+def patient_review_delegation_collection(patient_id):
+    identity = current_identity()
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    if request.method == "GET":
+        grants = PatientReviewDelegation.query.filter_by(
+            patient_id=patient_id,
+            delegated_by_user_id=identity.user_id,
+        ).order_by(PatientReviewDelegation.created_at.desc()).all()
+        return jsonify({"delegations": [delegation_to_dict(item) for item in grants]})
+
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    reviewer_id = payload.get("reviewer_user_id")
+    if isinstance(reviewer_id, bool) or not isinstance(reviewer_id, int):
+        return jsonify({"error": "reviewer_user_id must be an integer"}), 400
+    try:
+        grant = create_review_delegation(
+            patient_id,
+            identity.user_id,
+            reviewer_id,
+            scope=payload.get("scope"),
+            reason=payload.get("reason"),
+        )
+    except ReviewDelegationError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(delegation_to_dict(grant)), 201
+
+
+@app.route("/api/patient-review-delegations/<int:delegation_id>/revoke", methods=["POST"])
+@require_auth
+def revoke_patient_review_delegation_route(delegation_id):
+    identity = current_identity()
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        grant = revoke_review_delegation(
+            delegation_id,
+            identity.user_id,
+            reason=payload.get("reason"),
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except ReviewDelegationError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(delegation_to_dict(grant)), 200
+
+
+@app.route("/api/assessments/<int:assessment_id>/corrections", methods=["GET", "POST"])
+@require_auth
+def assessment_correction_collection(assessment_id):
+    identity = current_identity()
+    assessment = db.session.get(AssessmentRecord, assessment_id)
+    if assessment is None:
+        return jsonify({"error": "assessment not found"}), 404
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, assessment.patient_id
+    ):
+        # Do not leak whether a different clinician's assessment exists.
+        return jsonify({"error": "forbidden"}), 403
+
+    if request.method == "GET":
+        corrections = AssessmentCorrection.query.filter_by(
+            assessment_id=assessment_id
+        ).order_by(AssessmentCorrection.requested_at.desc()).all()
+        return jsonify({
+            "assessment_id": assessment_id,
+            "original_snapshot_hash": effective_assessment_values(
+                assessment_id
+            )["source_snapshot_hash"],
+            "corrections": [correction_to_dict(item, include_events=True) for item in corrections],
+        })
+
+    require_csrf()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        correction = request_assessment_correction(
+            assessment_id,
+            identity.user_id,
+            field_name=payload.get("field_name"),
+            proposed_value=payload.get("proposed_value"),
+            reason=payload.get("reason"),
+            evidence_reference=payload.get("evidence_reference"),
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except CorrectionWorkflowError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(correction_to_dict(correction, include_events=True)), 201
+
+
+@app.route("/api/assessment-corrections/<int:correction_id>", methods=["GET"])
+@require_auth
+def assessment_correction_detail_route(correction_id):
+    identity = current_identity()
+    correction = db.session.get(AssessmentCorrection, correction_id)
+    if correction is None:
+        return jsonify({"error": "correction not found"}), 404
+    if not (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, correction.patient_id, "assessment_correction"
+        )
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    from dashboard.services.assessment_corrections import correction_to_dict
+    return jsonify(correction_to_dict(correction, include_events=True)), 200
+
+
+@app.route("/api/assessment-corrections/<int:correction_id>/review", methods=["POST"])
+@require_auth
+def assessment_correction_review_route(correction_id):
+    identity = current_identity()
+    correction = db.session.get(AssessmentCorrection, correction_id)
+    if correction is None:
+        return jsonify({"error": "correction not found"}), 404
+    if not (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, correction.patient_id, "assessment_correction"
+        )
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        reviewed = review_assessment_correction(
+            correction_id,
+            identity.user_id,
+            decision=payload.get("decision"),
+            rationale=payload.get("rationale"),
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except CorrectionWorkflowError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify(correction_to_dict(reviewed, include_events=True)), 200
+
+
+@app.route("/review/queue", methods=["GET"])
+@require_auth
+def review_queue():
+    identity = current_identity()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+
+    plan_items = []
+    correction_items = []
+    grants = PatientReviewDelegation.query.filter_by(
+        delegated_to_user_id=identity.user_id,
+        revoked_at=None,
+    ).order_by(PatientReviewDelegation.created_at.desc()).all()
+    for grant in grants:
+        if not has_active_review_delegation(
+            identity.user_id, grant.patient_id, grant.scope
+        ):
+            continue
+        if grant.scope == "plan_approval":
+            plans = WorkoutPlan.query.filter(
+                WorkoutPlan.patient_id == grant.patient_id,
+                WorkoutPlan.approval_status.in_(("draft", "suspended")),
+                WorkoutPlan.created_by_user_id != identity.user_id,
+            ).order_by(WorkoutPlan.created_at.desc()).all()
+            plan_items.extend(plans)
+        elif grant.scope == "assessment_correction":
+            corrections = AssessmentCorrection.query.filter_by(
+                patient_id=grant.patient_id,
+                status="pending",
+            ).filter(
+                AssessmentCorrection.requested_by_user_id != identity.user_id
+            ).order_by(AssessmentCorrection.requested_at.desc()).all()
+            correction_items.extend(corrections)
+
+    dedup_plans = {plan.plan_id: plan for plan in plan_items}
+    dedup_corrections = {item.correction_id: item for item in correction_items}
+    return render_template(
+        "review_queue.html",
+        plans=list(dedup_plans.values()),
+        corrections=[
+            correction_to_dict(item, include_events=False)
+            for item in dedup_corrections.values()
+        ],
+    )
+
+
+@app.route("/review/assessment-corrections/<int:correction_id>", methods=["GET", "POST"])
+@require_auth
+def assessment_correction_review_page(correction_id):
+    identity = current_identity()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    correction = db.session.get(AssessmentCorrection, correction_id)
+    if correction is None:
+        abort(404)
+    allowed = (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, correction.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, correction.patient_id, "assessment_correction"
+        )
+    )
+    if not allowed or identity.user_id == correction.requested_by_user_id:
+        abort(404)
+
+    if request.method == "POST":
+        require_csrf()
+        try:
+            reviewed = review_assessment_correction(
+                correction_id,
+                identity.user_id,
+                decision=request.form.get("decision"),
+                rationale=request.form.get("rationale"),
+            )
+        except (LookupError, CorrectionWorkflowError) as error:
+            return render_template(
+                "assessment_correction_review.html",
+                correction=correction_to_dict(correction, include_events=True),
+                error=str(error),
+            ), 409
+        return redirect(url_for(
+            "assessment_correction_review_page",
+            correction_id=reviewed.correction_id,
+            result=reviewed.status,
+        ))
+
+    return render_template(
+        "assessment_correction_review.html",
+        correction=correction_to_dict(correction, include_events=True),
+        error=None,
+        result=request.args.get("result"),
+    )
+
+
+@app.route("/review/workout-plans/<int:plan_id>", methods=["GET", "POST"])
+@require_auth
+def workout_plan_review_page(plan_id):
+    identity = current_identity()
+    if not any(role.value == "CLINICIAN" for role in identity.roles):
+        return jsonify({"error": "clinician role required"}), 403
+    plan = db.session.get(WorkoutPlan, plan_id)
+    if plan is None:
+        abort(404)
+    allowed = plan.patient_id is None or (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, plan.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, plan.patient_id, "plan_approval"
+        )
+    )
+    if not allowed or identity.user_id == plan.created_by_user_id:
+        abort(404)
+
+    exercises = []
+    from core.workout import BUILTIN_EXERCISES
+    for item in plan.exercises:
+        try:
+            profile = BUILTIN_EXERCISES.get(item.exercise_id).profile_for_side(item.side)
+            maturity = profile.validation_status
+            profile_description = profile.description
+        except (KeyError, ValueError, AttributeError):
+            maturity = "unknown"
+            profile_description = "Profile unavailable; do not approve until investigated."
+        exercises.append({
+            "position": item.position + 1,
+            "exercise_id": item.exercise_id,
+            "side": item.side,
+            "target_repetitions": item.target_repetitions,
+            "resistance_value": float(item.resistance_value) if item.resistance_value is not None else None,
+            "resistance_unit": item.resistance_unit,
+            "validation_status": maturity,
+            "description": profile_description,
+        })
+
+    if request.method == "POST":
+        require_csrf()
+        try:
+            reviewed_plan, event = review_workout_plan(
+                plan_id,
+                reviewer_user_id=identity.user_id,
+                decision=request.form.get("decision"),
+                rationale=request.form.get("rationale"),
+            )
+        except (LookupError, ValueError) as error:
+            plan = db.session.get(WorkoutPlan, plan_id)
+            return render_template(
+                "workout_plan_review.html",
+                plan=plan,
+                exercises=exercises,
+                error=str(error),
+            ), 409
+        return redirect(url_for(
+            "workout_plan_review_page",
+            plan_id=reviewed_plan.plan_id,
+            result=reviewed_plan.approval_status,
+        ))
+
+    return render_template(
+        "workout_plan_review.html",
+        plan=plan,
+        exercises=exercises,
+        error=None,
+        result=request.args.get("result"),
+    )
+
+
+@app.route("/api/assessments/<int:assessment_id>/effective-values", methods=["GET"])
+@require_auth
+def assessment_effective_values_route(assessment_id):
+    identity = current_identity()
+    assessment = db.session.get(AssessmentRecord, assessment_id)
+    if assessment is None:
+        return jsonify({"error": "assessment not found"}), 404
+    if not authorize_patient_access(
+        identity, Capability.VIEW_ASSIGNED_PATIENT, assessment.patient_id
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    return jsonify(effective_assessment_values(assessment_id))
+
+
 @app.route("/assessment/<int:assessment_id>")
 @require_auth
 def view_assessment(assessment_id):
@@ -1025,18 +1414,34 @@ def view_assessment(assessment_id):
     ):
         abort(404)
 
+    effective = effective_assessment_values(assessment_id)
+    correction_records = AssessmentCorrection.query.filter_by(
+        assessment_id=assessment_id
+    ).order_by(AssessmentCorrection.requested_at.desc()).all()
+    correction_history = [
+        correction_to_dict(item, include_events=False)
+        for item in correction_records
+    ]
+    feedback_value = effective.get("feedback")
+    if isinstance(feedback_value, str):
+        try:
+            feedback_value = json.loads(feedback_value or "[]")
+        except (TypeError, json.JSONDecodeError):
+            feedback_value = {
+                "status": "unavailable",
+                "reason": "feedback data is malformed",
+            }
     report = {
-
-        "exercise": assessment.exercise,
-        "repetitions": assessment.repetitions,
-        "average_score": assessment.average_score,
-        "best_score": assessment.best_score,
-        "worst_score": assessment.worst_score,
-        "trend": assessment.trend,
-        "feedback": json.loads(
-            assessment.feedback or "[]"
-        )
-
+        "exercise": effective["exercise"],
+        "repetitions": effective["repetitions"],
+        "average_score": effective["average_score"],
+        "best_score": effective["best_score"],
+        "worst_score": effective["worst_score"],
+        "trend": effective["trend"],
+        "feedback": feedback_value,
+        "effective_corrections": effective["effective_corrections"],
+        "stale_correction_ids": effective["stale_correction_ids"],
+        "source_snapshot_hash": effective["source_snapshot_hash"],
     }
 
     return render_template(
@@ -1050,6 +1455,15 @@ def view_assessment(assessment_id):
             Capability.VIEW_ASSIGNED_PATIENT,
             assessment.patient_id,
         ),
+        can_request_correction=(
+            authorize_patient_access(
+                current_identity(),
+                Capability.VIEW_ASSIGNED_PATIENT,
+                assessment.patient_id,
+            )
+            and any(role.value == "CLINICIAN" for role in current_identity().roles)
+        ),
+        correction_history=correction_history,
     )
 
 
@@ -1332,6 +1746,7 @@ def save_workout_plan():
             prescriptions,
             patient_id=patient_id,
             description=description,
+            created_by_user_id=identity.user_id,
         )
     except (TypeError, ValueError) as error:
         return jsonify({"error": str(error)}), 400
@@ -1341,7 +1756,54 @@ def save_workout_plan():
         "name": plan.name,
         "patient_id": plan.patient_id,
         "exercise_count": len(plan.exercises),
+        "approval_status": plan.approval_status,
     }), 201
+
+
+@app.route("/workout/plans/<int:plan_id>/review", methods=["POST"])
+@require_auth
+def review_workout_plan_route(plan_id: int):
+    identity = current_identity()
+    require_csrf()
+    roles = {role.value for role in identity.roles}
+    if "CLINICIAN" not in roles:
+        return jsonify({"error": "only clinicians may review workout plans"}), 403
+    plan = db.session.get(WorkoutPlan, plan_id)
+    if plan is None:
+        return jsonify({"error": f"workout plan {plan_id} does not exist"}), 404
+    if plan.patient_id is not None and not (
+        authorize_patient_access(
+            identity, Capability.VIEW_ASSIGNED_PATIENT, plan.patient_id
+        )
+        or has_active_review_delegation(
+            identity.user_id, plan.patient_id, "plan_approval"
+        )
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    decision = payload.get("decision")
+    rationale = payload.get("rationale")
+    try:
+        reviewed_plan, event = review_workout_plan(
+            plan_id,
+            reviewer_user_id=identity.user_id,
+            decision=decision,
+            rationale=rationale,
+        )
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 409
+    return jsonify({
+        "plan_id": reviewed_plan.plan_id,
+        "approval_status": reviewed_plan.approval_status,
+        "review_event_id": event.event_id,
+        "review_event_hash": event.event_hash,
+        "reviewed_at": event.occurred_at.isoformat(),
+    }), 200
+
 
 @app.route("/patients")
 @require_auth
@@ -1944,10 +2406,23 @@ def start_assessment():
     ):
         return jsonify({"error": "forbidden"}), 403
 
+    try:
+        assert_safety_scope_allowed("clinical_assessment_start")
+    except SafetyRestrictionError as error:
+        return jsonify({
+            "error": str(error),
+            "restriction_scope": error.scope,
+            "incident_keys": [item.incident_key for item in error.incidents],
+        }), 423
+
+    profile = get_exercise_profile(exercise_type)
+    validation_error = _exercise_validation_error(profile)
+    if validation_error:
+        return jsonify({"error": validation_error}), 409
 
     new_session = AssessmentSession(
         exercise=exercise_type,
-        profile=get_exercise_profile(exercise_type),
+        profile=profile,
         exercise_state=ExerciseState(),
         patient_id=patient_id,
     )
@@ -2041,16 +2516,49 @@ def start_workout():
         patient_id,
     ):
         return jsonify({"error": "forbidden"}), 403
+    try:
+        assert_safety_scope_allowed("workout_activation")
+        if selected_plan_id is not None:
+            assert_safety_scope_allowed("plan_activation")
+    except SafetyRestrictionError as error:
+        return jsonify({
+            "error": str(error),
+            "restriction_scope": error.scope,
+            "incident_keys": [item.incident_key for item in error.incidents],
+        }), 423
+    if selected_plan_id is None and not app.config.get(
+        "REVALIV_ENABLE_UNVALIDATED_EXERCISES", False
+    ):
+        for prescription in preset.exercises:
+            definition = BUILTIN_EXERCISES.get(prescription.exercise_id)
+            profile = definition.profile_for_side(prescription.side)
+            validation_error = _exercise_validation_error(profile)
+            if validation_error:
+                return jsonify({"error": validation_error}), 409
+
     if selected_plan_id is not None:
         try:
             preset = load_workout_preset(
                 selected_plan_id,
                 patient_id=patient_id,
+                require_approved=True,
+                allow_engineering_only=bool(
+                    app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+                ),
+                allow_non_clinically_validated=bool(
+                    app.config.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", False)
+                ),
             )
         except LookupError:
             return jsonify({"error": f"workout plan {selected_plan_id} does not exist"}), 404
         except ValueError as error:
-            return jsonify({"error": str(error)}), 400
+            message = str(error)
+            status = 409 if (
+                "not clinician-approved" in message
+                or "review history integrity" in message
+                or "not enabled for clinical sessions" in message
+            ) else 400
+            return jsonify({"error": message}), status
 
     context = runtime_context_for_request()
     with context.lock:
@@ -3309,6 +3817,312 @@ def discard_assessment():
     if any(role.value == "PATIENT" for role in identity.roles):
         return redirect(url_for("patient_home"))
     return redirect(url_for("home"))
+
+
+
+# ==========================================================
+# Safety Incident and Corrective-Action Governance
+# ==========================================================
+
+_SAFETY_LEAD_ROLE_NAMES = {"ADMIN", "CLINICIAN", "OPERATOR"}
+
+
+def _identity_can_manage_safety(identity):
+    return any(role.value in _SAFETY_LEAD_ROLE_NAMES for role in identity.roles)
+
+
+def _safety_error_response(error, status=400):
+    return jsonify({"error": str(error)}), status
+
+
+@app.route("/api/safety/incidents", methods=["GET", "POST"])
+@require_auth
+def safety_incident_collection():
+    identity = current_identity()
+    if request.method == "GET":
+        if not _identity_can_manage_safety(identity):
+            return jsonify({"error": "safety-lead authorization required"}), 403
+        incidents = SafetyIncident.query.order_by(
+            SafetyIncident.reported_at.desc()
+        ).limit(500).all()
+        return jsonify({
+            "incidents": [
+                safety_incident_to_dict(item, include_events=False)
+                for item in incidents
+            ],
+        })
+
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = report_safety_incident(
+            identity.user_id,
+            category=payload.get("category"),
+            summary=payload.get("summary"),
+            details=payload.get("details", ""),
+            severity=payload.get("severity"),
+            likelihood=payload.get("likelihood"),
+            evidence_strength=payload.get("evidence_strength"),
+            exposure_count=payload.get("exposure_count", 1),
+            control_failure=payload.get("control_failure", False),
+            restriction_scopes=payload.get("restriction_scopes"),
+            restriction_reason=payload.get("restriction_reason"),
+        )
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 400)
+    return jsonify(safety_incident_to_dict(incident, include_events=True)), 201
+
+
+@app.route("/api/safety/incidents/<int:incident_id>", methods=["GET"])
+@require_auth
+def safety_incident_detail(incident_id):
+    identity = current_identity()
+    incident = db.session.get(SafetyIncident, incident_id)
+    if incident is None:
+        return jsonify({"error": "safety incident not found"}), 404
+    if (
+        identity.user_id != incident.reporter_user_id
+        and not _identity_can_manage_safety(identity)
+    ):
+        return jsonify({"error": "forbidden"}), 403
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/triage", methods=["POST"])
+@require_auth
+def safety_incident_triage(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = triage_safety_incident(
+            incident_id,
+            identity.user_id,
+            owner_user_id=payload.get("owner_user_id"),
+            root_cause_status=payload.get("root_cause_status"),
+            root_cause_notes=payload.get("root_cause_notes"),
+            restriction_scopes=payload.get("restriction_scopes"),
+            restriction_reason=payload.get("restriction_reason"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/actions", methods=["POST"])
+@require_auth
+def safety_incident_create_action(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        due_at_value = payload.get("due_at")
+        if not isinstance(due_at_value, str):
+            raise SafetyWorkflowError("due_at must be an ISO-8601 datetime string")
+        try:
+            due_at = datetime.fromisoformat(due_at_value.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise SafetyWorkflowError("due_at must be a valid ISO-8601 datetime string") from error
+        action = create_corrective_action(
+            incident_id,
+            identity.user_id,
+            title=payload.get("title"),
+            description=payload.get("description", ""),
+            owner_user_id=payload.get("owner_user_id"),
+            due_at=due_at,
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify({
+        "action_id": action.action_id,
+        "incident_id": action.incident_id,
+        "title": action.title,
+        "owner_user_id": action.owner_user_id,
+        "status": action.status,
+        "due_at": action.due_at.isoformat(),
+    }), 201
+
+
+@app.route(
+    "/api/safety/incidents/<int:incident_id>/actions/<int:action_id>/status",
+    methods=["POST"],
+)
+@require_auth
+def safety_incident_action_status(incident_id, action_id):
+    identity = current_identity()
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        action = update_corrective_action(
+            incident_id,
+            action_id,
+            identity.user_id,
+            status=payload.get("status"),
+            evidence=payload.get("evidence"),
+            effectiveness_result=payload.get("effectiveness_result"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify({
+        "action_id": action.action_id,
+        "incident_id": action.incident_id,
+        "status": action.status,
+        "completed_at": action.completed_at.isoformat() if action.completed_at else None,
+        "verified_at": action.verified_at.isoformat() if action.verified_at else None,
+    })
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/review", methods=["POST"])
+@require_auth
+def safety_incident_independent_review(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = record_independent_safety_review(
+            incident_id,
+            identity.user_id,
+            payload.get("rationale"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/close", methods=["POST"])
+@require_auth
+def safety_incident_close(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = close_safety_incident(
+            incident_id,
+            identity.user_id,
+            rationale=payload.get("rationale"),
+            root_cause_status=payload.get("root_cause_status"),
+            root_cause_notes=payload.get("root_cause_notes"),
+            external_board_reference=payload.get("external_board_reference"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/reopen", methods=["POST"])
+@require_auth
+def safety_incident_reopen(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        incident = reopen_safety_incident(
+            incident_id,
+            identity.user_id,
+            trigger=payload.get("trigger"),
+            details=payload.get("details"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify(safety_incident_to_dict(incident, include_events=True))
+
+
+@app.route("/api/safety/incidents/<int:incident_id>/links", methods=["POST"])
+@require_auth
+def safety_incident_link_route(incident_id):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    require_csrf()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    try:
+        related_id = payload.get("related_incident_id")
+        if isinstance(related_id, bool) or not isinstance(related_id, int):
+            raise SafetyWorkflowError("related_incident_id must be an integer")
+        link = link_safety_incidents(
+            incident_id,
+            related_id,
+            identity.user_id,
+            link_type=payload.get("link_type"),
+            rationale=payload.get("rationale"),
+        )
+    except LookupError as error:
+        return _safety_error_response(error, 404)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 409)
+    return jsonify({
+        "link_id": link.link_id,
+        "incident_id": link.incident_id,
+        "related_incident_id": link.related_incident_id,
+        "link_type": link.link_type,
+        "rationale": link.rationale,
+        "created_at": link.created_at.isoformat(),
+    }), 201
+
+
+@app.route("/api/safety/restrictions/<scope>", methods=["GET"])
+@require_auth
+def safety_restriction_status(scope):
+    identity = current_identity()
+    if not _identity_can_manage_safety(identity):
+        return jsonify({"error": "safety-lead authorization required"}), 403
+    try:
+        restrictions = active_safety_restrictions(scope)
+    except SafetyWorkflowError as error:
+        return _safety_error_response(error, 400)
+    return jsonify({
+        "scope": scope,
+        "active": bool(restrictions),
+        "incidents": [
+            {
+                "incident_id": incident.incident_id,
+                "incident_key": incident.incident_key,
+                "priority_tier": incident.priority_tier,
+                "restriction_reason": incident.restriction_reason,
+                "reported_at": incident.reported_at.isoformat(),
+                "response_due_at": incident.response_due_at.isoformat(),
+            }
+            for incident in restrictions
+        ],
+    })
 
 # ==========================================================
 # Application Entry

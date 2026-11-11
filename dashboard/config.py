@@ -5,6 +5,21 @@ from collections.abc import Mapping
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
+def resolve_unvalidated_exercise_setting(environ: Mapping[str, str]) -> bool:
+    """Require explicit opt-in for any exercise without clinical validation.
+
+    This escape hatch is intended only for controlled engineering evaluation
+    and automated tests. It is a hard configuration error in production.
+    """
+    environment = environ.get("REVALIV_ENV", "development").strip().lower()
+    enabled = environ.get("REVALIV_ENABLE_UNVALIDATED_EXERCISES", "0").strip() == "1"
+    if enabled and environment in {"prod", "production"}:
+        raise RuntimeError(
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES must remain disabled in production."
+        )
+    return enabled
+
+
 def resolve_security_settings(environ: Mapping[str, str]) -> tuple[str, bool]:
     """Resolve the Flask session secret and cookie transport policy.
 
@@ -36,6 +51,7 @@ def resolve_security_settings(environ: Mapping[str, str]) -> tuple[str, bool]:
 
 
 _SECRET_KEY, _SESSION_COOKIE_SECURE = resolve_security_settings(os.environ)
+_UNVALIDATED_EXERCISES_ENABLED = resolve_unvalidated_exercise_setting(os.environ)
 
 
 class Config:
@@ -46,6 +62,10 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = _SESSION_COOKIE_SECURE
+
+    # No exercise is permitted in clinical mode until its status is validated.
+    # This flag is only for controlled engineering evaluation/test environments.
+    REVALIV_ENABLE_UNVALIDATED_EXERCISES = _UNVALIDATED_EXERCISES_ENABLED
 
     REVALIV_ENV = os.environ.get("REVALIV_ENV", "development").strip().lower()
     REVALIV_PUBLIC_BASE_URL = os.environ.get(

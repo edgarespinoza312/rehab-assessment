@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Review Workout Plan | Revaliv{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h1>Independent Workout Plan Review</h1>
+    <p>Review access is limited to this plan and its proposed exercise parameters. Approval does not establish clinical validity.</p>
+</section>
+
+{% if error %}
+<section class="card" role="alert"><strong>Review could not be completed.</strong> {{ error }}</section>
+{% endif %}
+{% if result %}
+<section class="card" role="status">Plan review result: {{ result|title }}.</section>
+{% endif %}
+
+<section class="card">
+    <h2>{{ plan.name }}</h2>
+    <p>Plan #{{ plan.plan_id }} — patient record #{{ plan.patient_id or "shared template" }}</p>
+    <p>Status: <strong>{{ plan.approval_status|title }}</strong></p>
+    {% if plan.description %}<p>{{ plan.description }}</p>{% endif %}
+    {% if plan.approval_note %}<p>Previous review note: {{ plan.approval_note }}</p>{% endif %}
+
+    <h3>Prescribed sequence</h3>
+    <ol>
+        {% for exercise in exercises %}
+        <li>
+            <strong>{{ exercise.exercise_id|replace("_", " ")|title }}</strong>,
+            {{ exercise.side }} side — {{ exercise.target_repetitions }} target repetitions
+            {% if exercise.resistance_value is not none %}
+            — resistance {{ exercise.resistance_value }} {{ exercise.resistance_unit }}
+            {% endif %}
+            <p>{{ exercise.description }}</p>
+            <p>Implementation/validation status: <strong>{{ exercise.validation_status }}</strong></p>
+            {% if exercise.validation_status != "clinically_validated" %}
+            <p role="alert">This exercise is not marked clinically validated. Do not approve it for clinical activation based on this page alone.</p>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+
+    {% if plan.approval_status in ["draft", "suspended"] %}
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="plan-review-rationale">Review rationale</label>
+        <textarea id="plan-review-rationale" name="rationale" minlength="8" maxlength="4000" required></textarea>
+        <div class="button-row">
+            <button class="btn btn-primary" name="decision" value="approve" type="submit">Approve plan</button>
+            <button class="btn" name="decision" value="reject" type="submit">Reject plan</button>
+        </div>
+    </form>
+    {% elif plan.approval_status == "approved" %}
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="plan-suspension-rationale">Suspension rationale</label>
+        <textarea id="plan-suspension-rationale" name="rationale" minlength="8" maxlength="4000" required></textarea>
+        <button class="btn" name="decision" value="suspend" type="submit">Suspend plan</button>
+    </form>
+    {% else %}
+    <p>This plan is not eligible for another review transition.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Review integrity</h2>
+    <p>Approval is recorded with the reviewer identity, rationale, timestamp, and a hash-linked event. Starting a saved plan requires the approval chain to verify.</p>
+</section>
+{% endblock %}

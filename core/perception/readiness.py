@@ -1,6 +1,8 @@
 """Backend-independent exercise readiness and identity policy."""
 
 from dataclasses import dataclass, field
+import math
+from numbers import Integral, Real
 import time
 from typing import Any
 
@@ -131,6 +133,47 @@ class ExerciseReadiness:
         performance=None,
     ) -> PerceptionResult:
         common = dict(diagnostics or {})
+        timestamp_valid = (
+            isinstance(timestamp, Real)
+            and not isinstance(timestamp, bool)
+            and math.isfinite(float(timestamp))
+        )
+        frame_valid = (
+            isinstance(frame_number, Integral)
+            and not isinstance(frame_number, bool)
+            and frame_number >= 0
+        )
+        dimensions_valid = (
+            isinstance(width, Integral) and not isinstance(width, bool)
+            and isinstance(height, Integral) and not isinstance(height, bool)
+            and width > 0 and height > 0
+        )
+        if not timestamp_valid or not frame_valid or not dimensions_valid:
+            reasons = []
+            if not timestamp_valid:
+                reasons.append("invalid_frame_timestamp")
+            if not frame_valid:
+                reasons.append("invalid_frame_number")
+            if not dimensions_valid:
+                reasons.append("invalid_image_dimensions")
+            self.identity_state.mark_invalid()
+            common.update({
+                "reason": ",".join(reasons),
+                "rejection_category": "invalid_frame_metadata",
+            })
+            safe_timestamp = float(timestamp) if timestamp_valid else 0.0
+            safe_frame_number = int(frame_number) if frame_valid else 0
+            return self._result(
+                None, ReadinessState.POOR_QUALITY, PoseStatus.INVALID,
+                backend, safe_timestamp, safe_frame_number,
+                {
+                    "accepted": False,
+                    "invalid": True,
+                    "rejection_category": "invalid_frame_metadata",
+                    "reasons": reasons,
+                },
+                common,
+            )
         if self.side_mismatch(exercise_side):
             return self.reject_side_mismatch(
                 backend=backend, timestamp=timestamp, frame_number=frame_number,

@@ -3,7 +3,7 @@ import unittest
 
 from flask import Flask, request
 
-from dashboard.config import Config, resolve_security_settings
+from dashboard.config import Config, resolve_security_settings, resolve_unvalidated_exercise_setting
 
 
 class ConfigSecurityTests(unittest.TestCase):
@@ -47,6 +47,24 @@ class ConfigSecurityTests(unittest.TestCase):
         })
         self.assertEqual(secret, "persistent-production-secret")
         self.assertTrue(secure_cookies)
+
+    def test_unvalidated_exercise_mode_is_opt_in(self):
+        self.assertFalse(resolve_unvalidated_exercise_setting({"REVALIV_ENV": "development"}))
+        self.assertTrue(resolve_unvalidated_exercise_setting({
+            "REVALIV_ENV": "development",
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES": "1",
+        }))
+
+    def test_production_cannot_enable_unvalidated_exercises(self):
+        with self.assertRaisesRegex(RuntimeError, "must remain disabled in production"):
+            resolve_unvalidated_exercise_setting({
+                "REVALIV_ENV": "production",
+                "REVALIV_ENABLE_UNVALIDATED_EXERCISES": "1",
+            })
+        self.assertFalse(resolve_unvalidated_exercise_setting({
+            "REVALIV_ENV": "production",
+            "REVALIV_ENABLE_UNVALIDATED_EXERCISES": "0",
+        }))
 
     def test_production_rejects_explicitly_disabled_secure_cookies(self):
         with self.assertRaisesRegex(RuntimeError, "REVALIV_SECURE_COOKIES"):

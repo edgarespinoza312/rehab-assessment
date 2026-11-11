@@ -20,6 +20,7 @@ from core.perception.base import (
     is_rejected_result,
 )
 from core.perception.identity import IdentityState
+from core.perception.readiness import ExerciseReadiness
 from core.performance import PerformanceMonitor
 from core.perception.quality import validate_landmarks
 from core.perception.yolo_tensorrt_backend import (
@@ -1062,3 +1063,119 @@ class PerceptionBackendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class AdversarialQualityGateTests(unittest.TestCase):
+    """Malformed camera/model values must never enter movement scoring."""
+
+    def test_invalid_dimensions_are_rejected_without_raising(self):
+        for width, height in ((0, 480), (-1, 480), (640, 0), (640, -1), (True, 480), (640, 1.5)):
+            with self.subTest(width=width, height=height):
+                decision = validate_landmarks(valid_keypoints(), 0.9, width, height)
+                self.assertFalse(decision.accepted)
+                self.assertTrue(decision.invalid)
+                self.assertIn("invalid_image_dimensions", decision.reasons)
+
+    def test_malformed_keypoint_containers_and_points_are_rejected(self):
+        for points in (None, [], "not-a-map"):
+            with self.subTest(points=points):
+                decision = validate_landmarks(points, 0.9, 640, 480)
+                self.assertFalse(decision.accepted)
+                self.assertTrue(decision.invalid)
+
+        for point in (None, (), (1.0, 2.0), (1.0, 2.0, 0.9, 3.0), (True, 2.0, 0.9)):
+            points = valid_keypoints()
+            points["left_elbow"] = point
+            with self.subTest(point=point):
+                decision = validate_landmarks(points, 0.9, 640, 480)
+                self.assertFalse(decision.accepted)
+                self.assertTrue(decision.invalid)
+
+    def test_non_finite_landmarks_and_person_confidence_are_rejected(self):
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            points = valid_keypoints()
+            points["left_wrist"] = (470.0, bad, 0.9)
+            with self.subTest(bad=bad):
+                decision = validate_landmarks(points, 0.9, 640, 480)
+                self.assertFalse(decision.accepted)
+                self.assertTrue(decision.invalid)
+
+            decision = validate_landmarks(valid_keypoints(), bad, 640, 480)
+            self.assertFalse(decision.accepted)
+            self.assertTrue(decision.invalid)
+            self.assertIn("non_finite_person_confidence", decision.reasons)
+
+    def test_identity_joint_bounds_and_confidence_range_are_enforced(self):
+        points = valid_keypoints()
+        points["right_shoulder"] = (640.0, 120.0, 0.9)
+        decision = validate_landmarks(points, 0.9, 640, 480, exercise_side="right")
+        self.assertFalse(decision.accepted)
+        self.assertIn("landmark_out_of_bounds:right_shoulder", decision.reasons)
+
+        points = valid_keypoints()
+        points["left_wrist"] = (470.0, 320.0, 1.01)
+        decision = validate_landmarks(points, 0.9, 640, 480)
+        self.assertFalse(decision.accepted)
+        self.assertIn("invalid_landmark_confidence:left_wrist", decision.reasons)
+
+    def test_missing_identity_joints_are_not_interpreted_as_zero_angles(self):
+        points = valid_keypoints()
+        points.pop("left_wrist")
+        decision = validate_landmarks(points, 0.9, 640, 480)
+        self.assertFalse(decision.accepted)
+        self.assertIn("missing_identity_joints:left_wrist", decision.reasons)
+
+
+class FrameMetadataIntegrityTests(unittest.TestCase):
+    def test_nan_timestamp_is_rejected_before_pose_processing(self):
+        readiness = ExerciseReadiness()
+        result = readiness.evaluate(
+            None,
+            backend="test",
+            timestamp=float("nan"),
+            frame_number=1,
+            width=640,
+            height=480,
+            exercise_side="left",
+        )
+        self.assertEqual(result.status, PoseStatus.INVALID)
+        self.assertFalse(result.pose_valid)
+        self.assertIn("invalid_frame_timestamp", result.quality["reasons"])
+        self.assertEqual(result.timestamp, 0.0)
+
+    def test_negative_or_non_integer_frame_number_is_rejected(self):
+        for frame_number in (-1, 1.5, True):
+            with self.subTest(frame_number=frame_number):
+                result = ExerciseReadiness().evaluate(
+                    None,
+                    backend="test",
+                    timestamp=1.0,
+                    frame_number=frame_number,
+                    width=640,
+                    height=480,
+                    exercise_side="left",
+                )
+                self.assertEqual(result.status, PoseStatus.INVALID)
+                self.assertIn("invalid_frame_number", result.quality["reasons"])
+
+    def test_invalid_dimensions_are_rejected_before_no_person_fallback(self):
+        result = ExerciseReadiness().evaluate(
+            None,
+            backend="test",
+            timestamp=1.0,
+            frame_number=1,
+            width=640,
+            height=0,
+            exercise_side="left",
+        )
+        self.assertEqual(result.status, PoseStatus.INVALID)
+        self.assertIn("invalid_image_dimensions", result.quality["reasons"])
+
+
+    def test_out_of_frame_hip_is_rejected_because_it_feeds_shoulder_metrics(self):
+        points = valid_keypoints()
+        points["left_hip"] = (700.0, 350.0, 0.9)
+        decision = validate_landmarks(points, 0.9, 640, 480, exercise_side="left")
+        self.assertFalse(decision.accepted)
+        self.assertIn("landmark_out_of_bounds:left_hip", decision.reasons)

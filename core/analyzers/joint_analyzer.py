@@ -64,6 +64,7 @@ class JointAnalyzer:
         self._calculate_lower_limb_metrics(
             skeleton,
             metrics,
+            profile,
         )
 
     def reset(self):
@@ -110,21 +111,54 @@ class JointAnalyzer:
         JointType.RIGHT_WRIST,
     )
 
-    # ------------------------------------------------------
-    # Select Active Measurement
-    # ------------------------------------------------------
+        metrics.shoulder_angle_left = self._calculate_angle_from_types(
+            skeleton,
+            JointType.LEFT_ELBOW,
+            JointType.LEFT_SHOULDER,
+            JointType.LEFT_HIP,
+        )
+        metrics.shoulder_angle_right = self._calculate_angle_from_types(
+            skeleton,
+            JointType.RIGHT_ELBOW,
+            JointType.RIGHT_SHOULDER,
+            JointType.RIGHT_HIP,
+        )
+
+        # Knee profiles measure ROM in the lower-limb analyzer. Do not
+        # let elbow geometry overwrite their active range-of-motion trace.
+        if profile is not None and profile.exercise in {
+            ExerciseType.LEFT_KNEE_EXTENSION,
+            ExerciseType.RIGHT_KNEE_EXTENSION,
+        }:
+            return
+
+        # ------------------------------------------------------
+        # Select Active Measurement
+        # ------------------------------------------------------
 
         if (
             profile is not None
-            and profile.exercise == ExerciseType.LEFT_BICEP_CURL
+            and profile.exercise in {
+                ExerciseType.LEFT_BICEP_CURL,
+                ExerciseType.LEFT_TRICEP_EXTENSION,
+            }
         ):
             active_angle = metrics.elbow_angle_left
 
         elif (
             profile is not None
-            and profile.exercise == ExerciseType.RIGHT_BICEP_CURL
+            and profile.exercise in {
+                ExerciseType.RIGHT_BICEP_CURL,
+                ExerciseType.RIGHT_TRICEP_EXTENSION,
+            }
         ):
             active_angle = metrics.elbow_angle_right
+
+        elif profile is not None and profile.exercise == ExerciseType.LEFT_SHOULDER_ABDUCTION:
+            active_angle = metrics.shoulder_angle_left
+
+        elif profile is not None and profile.exercise == ExerciseType.RIGHT_SHOULDER_ABDUCTION:
+            active_angle = metrics.shoulder_angle_right
 
         elif metrics.elbow_angle_left is not None:
 
@@ -173,14 +207,40 @@ class JointAnalyzer:
         self,
         skeleton: Skeleton,
         metrics: MovementMetrics,
+        profile: ExerciseProfile | None = None,
     ):
-        """
-        Calculates lower-limb biomechanics.
+        """Calculate lower-limb angles and track ROM for selected knee exercise."""
+        metrics.knee_angle_left = self._calculate_angle_from_types(
+            skeleton,
+            JointType.LEFT_HIP,
+            JointType.LEFT_KNEE,
+            JointType.LEFT_ANKLE,
+        )
+        metrics.knee_angle_right = self._calculate_angle_from_types(
+            skeleton,
+            JointType.RIGHT_HIP,
+            JointType.RIGHT_KNEE,
+            JointType.RIGHT_ANKLE,
+        )
 
-        Placeholder for future implementation.
-        """
+        if profile is None:
+            return
+        if profile.exercise == ExerciseType.LEFT_KNEE_EXTENSION:
+            active_angle = metrics.knee_angle_left
+        elif profile.exercise == ExerciseType.RIGHT_KNEE_EXTENSION:
+            active_angle = metrics.knee_angle_right
+        else:
+            return
 
-        pass
+        if active_angle is None:
+            return
+        if self._peak_extension is None or active_angle > self._peak_extension:
+            self._peak_extension = active_angle
+        if self._peak_flexion is None or active_angle < self._peak_flexion:
+            self._peak_flexion = active_angle
+        metrics.peak_extension = self._peak_extension
+        metrics.peak_flexion = self._peak_flexion
+        metrics.range_of_motion = self._peak_extension - self._peak_flexion
 
     # ==========================================================
     # Geometry Helpers

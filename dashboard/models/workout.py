@@ -15,6 +15,12 @@ class ExerciseIdentity(db.Model):
 
 class WorkoutPlan(db.Model):
     __tablename__ = "workout_plans"
+    __table_args__ = (
+        db.CheckConstraint(
+            "approval_status IN ('draft', 'approved', 'rejected', 'suspended')",
+            name="ck_workout_plan_approval_status",
+        ),
+    )
 
     plan_id = db.Column(db.Integer, primary_key=True)
     patient_id = db.Column(
@@ -25,6 +31,22 @@ class WorkoutPlan(db.Model):
     )
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=False, default="")
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    approval_status = db.Column(
+        db.String(16), nullable=False, default="draft", server_default="draft"
+    )
+    approved_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approval_note = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime,
@@ -34,6 +56,11 @@ class WorkoutPlan(db.Model):
     )
 
     patient = db.relationship("Patient", back_populates="workout_plans")
+    review_events = db.relationship(
+        "WorkoutPlanReviewEvent",
+        back_populates="plan",
+        order_by="WorkoutPlanReviewEvent.event_id",
+    )
     exercises = db.relationship(
         "WorkoutPlanExercise",
         back_populates="plan",
@@ -215,3 +242,45 @@ class WorkoutExerciseResult(db.Model):
     )
     exercise_identity = db.relationship("ExerciseIdentity")
     workout_plan_exercise = db.relationship("WorkoutPlanExercise")
+
+
+
+class WorkoutPlanReviewEvent(db.Model):
+    """Auditable, hash-linked record of a plan approval/rejection/suspension."""
+
+    __tablename__ = "workout_plan_review_events"
+    __table_args__ = (
+        db.CheckConstraint(
+            "decision IN ('approve', 'reject', 'suspend')",
+            name="ck_workout_plan_review_decision",
+        ),
+        db.CheckConstraint(
+            "previous_status IN ('draft', 'approved', 'rejected', 'suspended') "
+            "AND new_status IN ('draft', 'approved', 'rejected', 'suspended')",
+            name="ck_workout_plan_review_statuses",
+        ),
+    )
+
+    event_id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workout_plans.plan_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    reviewer_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.user_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    decision = db.Column(db.String(16), nullable=False)
+    previous_status = db.Column(db.String(16), nullable=False)
+    new_status = db.Column(db.String(16), nullable=False)
+    rationale = db.Column(db.Text, nullable=False)
+    occurred_at = db.Column(db.DateTime, nullable=False)
+    previous_hash = db.Column(db.String(64), nullable=False)
+    event_hash = db.Column(db.String(64), nullable=False, unique=True)
+
+    plan = db.relationship("WorkoutPlan", back_populates="review_events")
+    reviewer = db.relationship("User")

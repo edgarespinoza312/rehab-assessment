@@ -179,10 +179,41 @@ Assessment Setup
                 <div>
                     <h4>{{ plan.name }}</h4>
                     <p>{{ plan.scope|title }} · {{ plan.exercise_count }} exercises</p>
+                    <p class="workout-approval-status">
+                        Approval status: <strong>{{ plan.approval_status|replace('_', ' ')|title }}</strong>
+                    </p>
+                    {% if plan.approved_at %}
+                    <p>Approved {{ plan.approved_at }} by reviewer account {{ plan.approved_by_user_id }}</p>
+                    {% endif %}
                     {% if plan.description %}<p>{{ plan.description }}</p>{% endif %}
+                    {% if can_select_patient and plan.approval_status in ['draft', 'approved', 'suspended'] %}
+                    <div class="workout-plan-review-controls">
+                        <label for="review-rationale-{{ plan.plan_id }}">Review rationale
+                            <textarea id="review-rationale-{{ plan.plan_id }}"
+                                      class="workout-plan-review-rationale"
+                                      maxlength="4000"
+                                      rows="2"
+                                      required
+                                      placeholder="Document why this plan is approved, rejected, or suspended."></textarea>
+                        </label>
+                        <div class="workout-plan-review-actions">
+                            {% if plan.approval_status == 'draft' or plan.approval_status == 'suspended' %}
+                            <button class="secondary-button workout-plan-review-button"
+                                    data-decision="approve" type="button">Approve Plan</button>
+                            <button class="secondary-button workout-plan-review-button"
+                                    data-decision="reject" type="button">Reject Plan</button>
+                            {% endif %}
+                            {% if plan.approval_status == 'approved' %}
+                            <button class="secondary-button workout-plan-review-button"
+                                    data-decision="suspend" type="button">Suspend Plan</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
-                <button class="begin-button workout-plan-start-button" type="button">
-                    Start Workout
+                <button class="begin-button workout-plan-start-button" type="button"
+                        {% if plan.approval_status != 'approved' %}disabled{% endif %}>
+                    {% if plan.approval_status == 'approved' %}Start Workout{% else %}Approval Required{% endif %}
                 </button>
             </article>
             {% endfor %}
